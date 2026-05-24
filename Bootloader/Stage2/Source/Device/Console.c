@@ -1,5 +1,6 @@
 #include <Device/Console.h>
 #include <Device/PortIO.h>
+#include <Device/Serial.h>
 #include <Library/Stdout.h>
 
 #define VgaMemory ((volatile uint16_t *)0xB8000)
@@ -60,6 +61,8 @@ void ConsoleClear(void)
 
 void ConsolePutc(char Character)
 {
+	SerialPutc(Character);
+
 	uint16_t Pos = GetCursor();
 
 	switch (Character) {
@@ -124,6 +127,7 @@ const ConsoleDevice *ConsoleGetDevice(void)
 void ConsoleInit(void)
 {
 	ConsoleSetColor(VgaDefaultForeground, VgaDefaultBackground);
+	SerialInit(SerialCom1, 115200);
 	StdoutPutc = ConsolePutc;
 	ConsoleClear();
 }
