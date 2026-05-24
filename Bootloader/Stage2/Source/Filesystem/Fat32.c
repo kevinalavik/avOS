@@ -1,7 +1,7 @@
 #include <Filesystem/Fat32.h>
 
 #include <Device/Disk.h>
-#include <Library/Log.h>
+#include <Library/DebugLog.h>
 #include <Memory/Allocator.h>
 
 #define MbrPartitionTable 446u
@@ -58,7 +58,7 @@ static bool FindPartition(const BlockFs *Block, uint8_t *SectorBuffer,
 						  uint32_t *PartitionLba)
 {
 	if (!BlockFsReadSectors(Block, 0, 1, SectorBuffer)) {
-		LogError("FAT32", "failed to read MBR");
+		BootError("FAT32", "failed to read MBR");
 		return false;
 	}
 
@@ -69,14 +69,14 @@ static bool FindPartition(const BlockFs *Block, uint8_t *SectorBuffer,
 
 		if (IsFat32Partition(Type)) {
 			*PartitionLba = ReadLe32(Entry + 8);
-			LogDebug("FAT32", "partition %u type 0x%x at LBA %u",
+			DebugLog("FAT32", "partition %u type 0x%x at LBA %u",
 					 (unsigned int)Index, (unsigned int)Type,
 					 (unsigned int)*PartitionLba);
 			return true;
 		}
 	}
 
-	LogWarn("FAT32", "no FAT32 partition found");
+	DebugLog("FAT32", "no FAT32 partition found");
 	return false;
 }
 
@@ -94,7 +94,7 @@ static bool ReadFatEntry(const Fat32Volume *Volume, uint32_t Cluster,
 	uint32_t SectorOffset = Offset % DiskSectorSize;
 
 	if (!BlockFsReadSectors(&Volume->Block, Sector, 1, Volume->SectorBuffer)) {
-		LogError("FAT32", "failed to read FAT sector %u", (unsigned int)Sector);
+		BootError("FAT32", "failed to read FAT sector %u", (unsigned int)Sector);
 		return false;
 	}
 
@@ -296,7 +296,7 @@ static bool FindDirectoryEntry(const Fat32Volume *Volume,
 		for (uint8_t Sector = 0; Sector < Volume->SectorsPerCluster; ++Sector) {
 			if (!BlockFsReadSectors(&Volume->Block, ClusterLba + Sector, 1,
 									Volume->SectorBuffer)) {
-				LogError("FAT32", "failed to read directory cluster %u",
+				BootError("FAT32", "failed to read directory cluster %u",
 						 (unsigned int)Cluster);
 				return false;
 			}
@@ -335,7 +335,7 @@ static bool FindDirectoryEntry(const Fat32Volume *Volume,
 		}
 
 		if (!ReadFatEntry(Volume, Cluster, &Cluster)) {
-			LogError("FAT32", "failed to follow root directory chain");
+			BootError("FAT32", "failed to follow root directory chain");
 			return false;
 		}
 	}
@@ -351,7 +351,7 @@ static bool FindInDirectory(const Fat32Volume *Volume,
 	bool HaveShortName = MakeShortNameN(Name, NameLength, ShortName);
 
 	if (!HaveShortName && NameLength >= Fat32LongNameMax) {
-		LogWarn("FAT32", "path segment too long");
+		DebugLog("FAT32", "path segment too long");
 		return false;
 	}
 
@@ -420,7 +420,7 @@ bool Fat32Mount(Fat32Volume *Volume, const BlockDevice *Device)
 	uint32_t PartitionLba;
 
 	if (Volume == 0 || Device == 0) {
-		LogError("FAT32", "mount rejected: null volume");
+		BootError("FAT32", "mount rejected: null volume");
 		return false;
 	}
 
@@ -429,7 +429,7 @@ bool Fat32Mount(Fat32Volume *Volume, const BlockDevice *Device)
 	Volume->ScratchBuffer = Alloc(DiskSectorSize, DiskSectorSize);
 
 	if (Volume->SectorBuffer == 0 || Volume->ScratchBuffer == 0) {
-		LogError("FAT32", "failed to allocate sector buffers");
+		BootError("FAT32", "failed to allocate sector buffers");
 		return false;
 	}
 
@@ -439,7 +439,7 @@ bool Fat32Mount(Fat32Volume *Volume, const BlockDevice *Device)
 
 	if (!BlockFsReadSectors(&Volume->Block, PartitionLba, 1,
 							Volume->SectorBuffer)) {
-		LogError("FAT32", "failed to read boot sector at LBA %u",
+		BootError("FAT32", "failed to read boot sector at LBA %u",
 				 (unsigned int)PartitionLba);
 		return false;
 	}
@@ -453,7 +453,7 @@ bool Fat32Mount(Fat32Volume *Volume, const BlockDevice *Device)
 
 	if (BytesPerSector != DiskSectorSize || SectorsPerCluster == 0 ||
 		FatCount == 0 || SectorsPerFat == 0 || RootCluster < 2) {
-		LogError("FAT32",
+		BootError("FAT32",
 				 "unsupported BPB: bytes/sector %u SPC %u FATs %u SPF %u "
 				 "root %u",
 				 (unsigned int)BytesPerSector, (unsigned int)SectorsPerCluster,
@@ -470,7 +470,7 @@ bool Fat32Mount(Fat32Volume *Volume, const BlockDevice *Device)
 	Volume->DataLba = Volume->FatLba + (FatCount * SectorsPerFat);
 	Volume->RootCluster = RootCluster;
 
-	LogInfo("FAT32", "BPB SPC %u FATs %u SPF %u data LBA %u",
+	DebugLog("FAT32", "BPB SPC %u FATs %u SPF %u data LBA %u",
 			(unsigned int)Volume->SectorsPerCluster,
 			(unsigned int)Volume->FatCount, (unsigned int)Volume->SectorsPerFat,
 			(unsigned int)Volume->DataLba);
@@ -489,7 +489,7 @@ size_t Fat32ReadFileAt(const Fat32Volume *Volume,
 					   void *Buffer, size_t Length)
 {
 	if (Volume == 0 || Entry == 0 || Buffer == 0) {
-		LogError("FAT32", "read rejected: null argument");
+		BootError("FAT32", "read rejected: null argument");
 		return 0;
 	}
 
@@ -506,7 +506,7 @@ size_t Fat32ReadFileAt(const Fat32Volume *Volume,
 
 	while (Offset >= ClusterSize && Cluster < Fat32EndOfChain) {
 		if (!ReadFatEntry(Volume, Cluster, &Cluster)) {
-			LogError("FAT32", "failed to seek within '%s'", Entry->Name);
+			BootError("FAT32", "failed to seek within '%s'", Entry->Name);
 			return 0;
 		}
 
@@ -525,7 +525,7 @@ size_t Fat32ReadFileAt(const Fat32Volume *Volume,
 
 			if (!BlockFsReadSectors(&Volume->Block, ClusterLba + Sector, 1,
 									Volume->ScratchBuffer)) {
-				LogError("FAT32", "short read from '%s' at cluster %u",
+				BootError("FAT32", "short read from '%s' at cluster %u",
 						 Entry->Name, (unsigned int)Cluster);
 				return TotalRead;
 			}
@@ -545,7 +545,7 @@ size_t Fat32ReadFileAt(const Fat32Volume *Volume,
 		}
 
 		if (Remaining > 0 && !ReadFatEntry(Volume, Cluster, &Cluster)) {
-			LogError("FAT32", "failed to continue reading '%s'", Entry->Name);
+			BootError("FAT32", "failed to continue reading '%s'", Entry->Name);
 			return TotalRead;
 		}
 	}

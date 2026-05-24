@@ -87,22 +87,22 @@ static bool TrySetContiguousState(Page *FirstPage, uint64_t PagesCount,
 bool PmmInit(uint64_t NewHhdmOffset)
 {
 	if (PageDbGet() == 0) {
-		LogError("PMM", "init rejected: page database unavailable");
+		LogError("core.mm.pmm", "init rejected: page database unavailable");
 		return false;
 	}
 
 	if (NewHhdmOffset == 0) {
-		LogError("PMM", "init rejected: missing HHDM offset");
+		LogError("core.mm.pmm", "init rejected: missing HHDM offset");
 		return false;
 	}
 
 	HhdmOffset = NewHhdmOffset;
 	RebuildFreeList();
 
-	LogInfo("PMM", "free pages=%llu (%llu MiB) hhdm=0x%llx",
-			(unsigned long long)FreePages,
-			(unsigned long long)((FreePages * PageSize) >> 20),
-			(unsigned long long)HhdmOffset);
+	LogDebug("core.mm.pmm", "free pages=%llu (%llu MiB) hhdm=0x%llx",
+			 (unsigned long long)FreePages,
+			 (unsigned long long)((FreePages * PageSize) >> 20),
+			 (unsigned long long)HhdmOffset);
 	return true;
 }
 
@@ -114,7 +114,7 @@ Page *PmmAllocPage(void)
 		PageEntry->FreeNext = 0;
 
 		if (!PageDbTrySetPageState(PageEntry, PageFree, PageUsed)) {
-			LogWarn("PMM", "skipping corrupt free-list page pfn=0x%llx",
+			LogWarn("core.mm.pmm", "skipping corrupt free-list page pfn=0x%llx",
 					(unsigned long long)PageDbPageToPfn(PageEntry));
 			continue;
 		}
@@ -123,7 +123,7 @@ Page *PmmAllocPage(void)
 		return PageEntry;
 	}
 
-	LogWarn("PMM", "out of physical pages");
+	LogWarn("core.mm.pmm", "out of physical pages");
 	return 0;
 }
 
@@ -135,13 +135,13 @@ Page *PmmAllocPages(uint64_t PagesCount)
 
 	Page *FirstPage = FindContiguousFreePages(PagesCount);
 	if (FirstPage == 0) {
-		LogWarn("PMM", "out of contiguous physical pages count=%llu",
+		LogWarn("core.mm.pmm", "out of contiguous physical pages count=%llu",
 				(unsigned long long)PagesCount);
 		return 0;
 	}
 
 	if (!TrySetContiguousState(FirstPage, PagesCount, PageFree, PageUsed)) {
-		LogWarn("PMM", "contiguous run changed while allocating count=%llu",
+		LogWarn("core.mm.pmm", "contiguous run changed while allocating count=%llu",
 				(unsigned long long)PagesCount);
 		return 0;
 	}
@@ -193,7 +193,7 @@ uint64_t PmmAllocPagesRawPhys(uint64_t PagesCount)
 bool PmmFreePage(Page *PageEntry)
 {
 	if (!PageDbTrySetPageState(PageEntry, PageUsed, PageFree)) {
-		LogWarn("PMM", "refusing invalid free pfn=0x%llx",
+		LogWarn("core.mm.pmm", "refusing invalid free pfn=0x%llx",
 				(unsigned long long)PageDbPageToPfn(PageEntry));
 		return false;
 	}
@@ -211,7 +211,7 @@ bool PmmFreePages(Page *PageEntry, uint64_t PagesCount)
 	}
 
 	if (!TrySetContiguousState(PageEntry, PagesCount, PageUsed, PageFree)) {
-		LogWarn("PMM", "refusing invalid contiguous free pfn=0x%llx count=%llu",
+		LogWarn("core.mm.pmm", "refusing invalid contiguous free pfn=0x%llx count=%llu",
 				(unsigned long long)PageDbPageToPfn(PageEntry),
 				(unsigned long long)PagesCount);
 		return false;
@@ -226,7 +226,7 @@ bool PmmFreePagePhys(uint64_t PhysicalAddress)
 	PhysicalAddress = PmmHhdmToPhys(PhysicalAddress);
 
 	if ((PhysicalAddress & (PageSize - 1ull)) != 0) {
-		LogWarn("PMM", "refusing unaligned free phys=0x%llx",
+		LogWarn("core.mm.pmm", "refusing unaligned free phys=0x%llx",
 				(unsigned long long)PhysicalAddress);
 		return false;
 	}
@@ -239,7 +239,7 @@ bool PmmFreePagesPhys(uint64_t PhysicalAddress, uint64_t PagesCount)
 	PhysicalAddress = PmmHhdmToPhys(PhysicalAddress);
 
 	if ((PhysicalAddress & (PageSize - 1ull)) != 0) {
-		LogWarn("PMM", "refusing unaligned free phys=0x%llx",
+		LogWarn("core.mm.pmm", "refusing unaligned free phys=0x%llx",
 				(unsigned long long)PhysicalAddress);
 		return false;
 	}

@@ -307,7 +307,7 @@ bool HeapInit(void)
 												   VmmRegionWritable |
 												   VmmRegionAnonymous);
 	if (HeapBase == 0) {
-		LogError("HEAP", "failed to reserve kernel heap");
+		LogError("core.mm.heap", "failed to reserve kernel heap");
 		return false;
 	}
 
@@ -318,14 +318,14 @@ bool HeapInit(void)
 	HeapFreeCount = 0;
 
 	if (!HeapGrow(KernelHeapInitialPages * PageSize)) {
-		LogError("HEAP", "failed to commit initial heap pages");
+		LogError("core.mm.heap", "failed to commit initial heap pages");
 		return false;
 	}
 
-	LogInfo("HEAP", "base=0x%llx reserved=%llu MiB committed=%llu KiB",
-			(unsigned long long)HeapBase,
-			(unsigned long long)(HeapReserved >> 20),
-			(unsigned long long)(HeapCommitted >> 10));
+	LogDebug("core.mm.heap", "base=0x%llx reserved=%llu MiB committed=%llu KiB",
+			 (unsigned long long)HeapBase,
+			 (unsigned long long)(HeapReserved >> 20),
+			 (unsigned long long)(HeapCommitted >> 10));
 	return true;
 }
 
@@ -352,7 +352,7 @@ void *KernelAllocAligned(size_t Size, size_t Alignment)
 	HeapBlock *Block = FindFreeBlock(Size, Alignment);
 	while (Block == 0) {
 		if (!HeapGrow(NeedBytes)) {
-			LogWarn("HEAP", "out of memory allocating %llu bytes",
+			LogWarn("core.mm.heap", "out of memory allocating %llu bytes",
 					(unsigned long long)Size);
 			return 0;
 		}
@@ -397,13 +397,13 @@ void KernelFree(void *Pointer)
 {
 	HeapBlock *Block = PointerToBlock(Pointer);
 	if (Block == 0) {
-		LogWarn("HEAP", "refusing invalid free ptr=0x%llx",
+		LogWarn("core.mm.heap", "refusing invalid free ptr=0x%llx",
 				(unsigned long long)(uintptr_t)Pointer);
 		return;
 	}
 
 	if (Block->Free) {
-		LogWarn("HEAP", "refusing double free ptr=0x%llx",
+		LogWarn("core.mm.heap", "refusing double free ptr=0x%llx",
 				(unsigned long long)(uintptr_t)Pointer);
 		return;
 	}

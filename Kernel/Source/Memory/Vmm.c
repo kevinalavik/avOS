@@ -113,9 +113,9 @@ void VmmInit(void)
 	}
 
 	RegionCount = 0;
-	LogInfo("VMM", "kernel arena 0x%llx-0x%llx",
-			(unsigned long long)VmmKernelArenaBase,
-			(unsigned long long)(VmmKernelArenaBase + VmmKernelArenaSize));
+	LogDebug("core.mm.vmm", "kernel arena 0x%llx-0x%llx",
+			 (unsigned long long)VmmKernelArenaBase,
+			 (unsigned long long)(VmmKernelArenaBase + VmmKernelArenaSize));
 }
 
 uint64_t VmmReserveRegion(uint64_t Size, uint64_t Flags)
@@ -151,7 +151,7 @@ uint64_t VmmReserveRegion(uint64_t Size, uint64_t Flags)
 
 		VmmRegion *Region = AllocRegionSlot();
 		if (Region == 0) {
-			LogError("VMM", "out of region slots");
+			LogError("core.mm.vmm", "out of region slots");
 			return 0;
 		}
 

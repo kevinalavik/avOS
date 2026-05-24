@@ -73,12 +73,12 @@ static bool FindMemoryMapLimit(const BootMemoryMapEntry *MemoryMap,
 		uint64_t End;
 
 		if (!RangeEnd(Entry->Base, Entry->Length, &End)) {
-			LogWarn("PAGEDB", "dropping invalid memory range %u",
+			LogWarn("core.mm.pagedb", "dropping invalid memory range %u",
 					(unsigned int)Index);
 			continue;
 		}
 
-		LogDebug("PAGEDB", "memmap[%u]: %s 0x%llx-0x%llx", (unsigned int)Index,
+		LogDebug("core.mm.pagedb", "memmap[%u]: %s 0x%llx-0x%llx", (unsigned int)Index,
 				 MemoryTypeName(Entry->Type), (unsigned long long)Entry->Base,
 				 (unsigned long long)End);
 
@@ -191,12 +191,12 @@ bool PageDbInit(const BootMemoryMapEntry *MemoryMap, uint32_t EntriesCount,
 				uint64_t HhdmOffset)
 {
 	if (MemoryMap == 0 || EntriesCount == 0) {
-		LogError("PAGEDB", "init rejected: missing memory map");
+		LogError("core.mm.pagedb", "init rejected: missing memory map");
 		return false;
 	}
 
 	if (HhdmOffset == 0) {
-		LogError("PAGEDB", "init rejected: missing HHDM offset");
+		LogError("core.mm.pagedb", "init rejected: missing HHDM offset");
 		return false;
 	}
 
@@ -204,7 +204,7 @@ bool PageDbInit(const BootMemoryMapEntry *MemoryMap, uint32_t EntriesCount,
 
 	if (!FindMemoryMapLimit(MemoryMap, EntriesCount) ||
 		!ReserveStorage(MemoryMap, EntriesCount)) {
-		LogError("PAGEDB", "no usable low-memory range for page database");
+		LogError("core.mm.pagedb", "no usable low-memory range for page database");
 		return false;
 	}
 
@@ -235,11 +235,11 @@ bool PageDbInit(const BootMemoryMapEntry *MemoryMap, uint32_t EntriesCount,
 
 	PageDbMarkRange(StoragePhys, StorageBytes, PageUsed);
 
-	LogInfo("PAGEDB", "pages=%llu max_pfn=0x%llx db=0x%llx bytes=%llu",
-			(unsigned long long)PageCount, (unsigned long long)MaxPfn,
-			(unsigned long long)StoragePhys, (unsigned long long)StorageBytes);
-	LogInfo("PAGEDB", "usable pages=%llu entry=%u bytes",
-			(unsigned long long)UsablePages, (unsigned int)sizeof(Page));
+	LogDebug("core.mm.pagedb", "pages=%llu max_pfn=0x%llx db=0x%llx bytes=%llu",
+			 (unsigned long long)PageCount, (unsigned long long)MaxPfn,
+			 (unsigned long long)StoragePhys, (unsigned long long)StorageBytes);
+	LogDebug("core.mm.pagedb", "usable pages=%llu entry=%u bytes",
+			 (unsigned long long)UsablePages, (unsigned int)sizeof(Page));
 
 	return true;
 }

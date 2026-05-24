@@ -1,7 +1,7 @@
 #include <Boot/BootInfo.h>
 #include <Device/PortIO.h>
 #include <Library/Framebuffer.h>
-#include <Library/Log.h>
+#include <Library/DebugLog.h>
 
 #include <stdbool.h>
 
@@ -166,7 +166,7 @@ static bool PciFindBochsVgaFramebuffer(uint32_t *AddressOut)
 				uint32_t Address;
 				if (PciReadFirstMemoryBar((uint8_t)Bus, Device, Function,
 										  &Address)) {
-					LogInfo(
+					DebugLog(
 						"FB",
 						"Bochs/QEMU VGA PCI %u:%u.%u BAR framebuffer 0x%08X",
 						(unsigned int)Bus, (unsigned int)Device,
@@ -198,18 +198,18 @@ static uint32_t DetectFramebufferAddress(void)
 void FramebufferInit(BootInfo *Info)
 {
 	if (!EnableBochsVbeFramebuffer()) {
-		LogWarn("FB", "no Bochs VBE framebuffer; display unavailable");
+		DebugLog("FB", "no Bochs VBE framebuffer; display unavailable");
 		return;
 	}
 
 	if (VesaModeNumber == 0 || VesaFramebufferAddress == 0) {
-		LogWarn("FB", "no Bochs VBE framebuffer; display unavailable");
+		DebugLog("FB", "no Bochs VBE framebuffer; display unavailable");
 		return;
 	}
 
 	uint32_t FramebufferAddress = DetectFramebufferAddress();
 	if (FramebufferAddress == 0) {
-		LogWarn("FB", "no framebuffer address found");
+		DebugLog("FB", "no framebuffer address found");
 		return;
 	}
 
@@ -219,6 +219,6 @@ void FramebufferInit(BootInfo *Info)
 	Info->Framebuffer.Pitch = VesaPitch;
 	Info->Framebuffer.Bpp = (uint8_t)VesaBpp;
 
-	LogOk("FB", "framebuffer at 0x%08X  %ux%u  %ubpp  pitch=%u",
+	DebugLog("FB", "framebuffer at 0x%08X  %ux%u  %ubpp  pitch=%u",
 		  FramebufferAddress, VesaWidth, VesaHeight, VesaBpp, VesaPitch);
 }

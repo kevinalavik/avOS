@@ -11,24 +11,33 @@ typedef enum {
 	LogLevelFatal,
 } LogLevel;
 
-void LogInit(void);
+void LogInit(const char *Cmdline);
+LogLevel LogGetLevel(void);
 void LogSetLevel(LogLevel Level);
+int LogShouldWrite(LogLevel Level);
 
 void LogWrite(LogLevel Level, const char *Component, const char *Format, ...);
 
+#define LogAt(Level, Component, Format, ...)                       \
+	do {                                                           \
+		if (LogShouldWrite(Level)) {                               \
+			LogWrite(Level, Component, Format, ##__VA_ARGS__);     \
+		}                                                          \
+	} while (0)
+
 #define LogTrace(Component, Format, ...) \
-	LogWrite(LogLevelTrace, Component, Format, ##__VA_ARGS__)
+	LogAt(LogLevelTrace, Component, Format, ##__VA_ARGS__)
 #define LogDebug(Component, Format, ...) \
-	LogWrite(LogLevelDebug, Component, Format, ##__VA_ARGS__)
+	LogAt(LogLevelDebug, Component, Format, ##__VA_ARGS__)
 #define LogInfo(Component, Format, ...) \
-	LogWrite(LogLevelInfo, Component, Format, ##__VA_ARGS__)
+	LogAt(LogLevelInfo, Component, Format, ##__VA_ARGS__)
 #define LogOk(Component, Format, ...) \
-	LogWrite(LogLevelOk, Component, Format, ##__VA_ARGS__)
+	LogAt(LogLevelOk, Component, Format, ##__VA_ARGS__)
 #define LogWarn(Component, Format, ...) \
-	LogWrite(LogLevelWarn, Component, Format, ##__VA_ARGS__)
+	LogAt(LogLevelWarn, Component, Format, ##__VA_ARGS__)
 #define LogError(Component, Format, ...) \
-	LogWrite(LogLevelError, Component, Format, ##__VA_ARGS__)
+	LogAt(LogLevelError, Component, Format, ##__VA_ARGS__)
 #define LogFatal(Component, Format, ...) \
-	LogWrite(LogLevelFatal, Component, Format, ##__VA_ARGS__)
+	LogAt(LogLevelFatal, Component, Format, ##__VA_ARGS__)
 
 #endif

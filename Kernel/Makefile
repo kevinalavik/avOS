@@ -6,6 +6,7 @@ BUILD_DIR := build
 KERNEL_ELF := $(BUILD_DIR)/kernel.elf
 
 INC := -IInclude -I../Common/Include -IExternal/flanterm/src
+
 CFLAGS ?= -m64 -mcmodel=kernel $(INC) -ffreestanding -fno-pic -fno-pie -fno-stack-protector -fno-asynchronous-unwind-tables -mno-red-zone -nostdlib -Wall -Wextra
 
 C_SRCS := $(shell find Source ../Common/Source External/flanterm/src -type f -name '*.c')

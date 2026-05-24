@@ -389,15 +389,15 @@ uint64_t PagingBuild(const BootInfo *Info)
 {
 	RootTablePhys = AllocTable();
 	if (RootTablePhys == 0) {
-		LogError("PAGING", "failed to allocate root table");
+		LogError("core.mm.paging", "failed to allocate root table");
 		return 0;
 	}
 
 	if (!MapKernel() || !MapHhdm() || !MapFramebuffer(&Info->Framebuffer)) {
-		LogError("PAGING", "failed to build kernel page tables");
+		LogError("core.mm.paging", "failed to build kernel page tables");
 		return 0;
 	}
 
-	LogInfo("PAGING", "loading cr3=0x%llx", (unsigned long long)RootTablePhys);
+	LogTrace("core.mm.paging", "loading cr3=0x%llx", (unsigned long long)RootTablePhys);
 	return RootTablePhys;
 }

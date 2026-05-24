@@ -59,20 +59,13 @@ static uint64_t ReadStackPointer(void)
 	return StackPointer;
 }
 
-static void HaltFatal(const char *Component, const char *Message)
-{
-	LogFatal(Component, "%s", Message);
-	for (;;)
-		__asm__ volatile("hlt");
-}
-
 static void InitFramebufferConsole(const BootFramebuffer *Framebuffer)
 {
 	FtCtx = NULL;
 
 	if (FramebufferInit(Framebuffer)) {
-		LogInfo(
-			"FB", "framebuffer: %ux%u pitch=%u bpp=%u addr=0x%llx",
+		LogDebug(
+			"core.graphic.fb", "framebuffer: %ux%u pitch=%u bpp=%u addr=0x%llx",
 			(unsigned int)Framebuffer->Width, (unsigned int)Framebuffer->Height,
 			(unsigned int)Framebuffer->Pitch, (unsigned int)Framebuffer->Bpp,
 			(unsigned long long)Framebuffer->Address);
@@ -85,69 +78,79 @@ static void InitFramebufferConsole(const BootFramebuffer *Framebuffer)
 
 		if (FtCtx != NULL) {
 			StdoutPutc = LogKernelPutc;
-			LogInfo("FB", "flanterm terminal initialized");
+			LogOk("core.graphic.fb", "framebuffer terminal initialized");
 		} else {
-			LogWarn("FB", "flanterm init returned null");
+			LogWarn("core.graphic.fb", "flanterm init returned null");
 		}
 	} else {
-		LogWarn("FB", "framebuffer unavailable");
+		LogWarn("core.graphic.fb", "framebuffer unavailable");
 	}
 }
 
 void KernelMain(const BootInfo *Info)
 {
-	LogInit();
-	LogSetLevel(LogLevelTrace);
-
 	SerialInit(SerialCom1, 115200);
 	TextConsoleInit();
 	StdoutPutc = LogKernelPutc;
 
 	if (!Info || Info->Magic != BootInfoMagic ||
 		Info->Version != BootInfoVersion || Info->Size < sizeof(BootInfo)) {
-		LogFatal("ENTRY", "invalid boot info");
+		LogFatal("core.sys.entry", "invalid boot info");
 		for (;;)
 			__asm__ volatile("hlt");
 	}
 
-	LogDebug("ENTRY", "hello from kernel");
+	LogInit(Info->Cmdline);
+	LogInfo("core.sys.entry", "kernel booting");
+	LogDebug("core.sys.entry", "boot info at 0x%llx",
+			 (unsigned long long)(uintptr_t)Info);
 	InitFramebufferConsole(&Info->Framebuffer);
+	if (Info->AcpiRsdpAddress != 0) {
+		LogDebug("core.acpi", "RSDP=0x%llx RSDT=0x%llx XSDT=0x%llx",
+				 (unsigned long long)Info->AcpiRsdpAddress,
+				 (unsigned long long)Info->AcpiRsdtAddress,
+				 (unsigned long long)Info->AcpiXsdtAddress);
+	} else {
+		LogDebug("core.acpi", "RSDP unavailable");
+	}
 
 	GdtInit();
-	LogOk("ARCH", "GDT initialized");
+	LogOk("core.arch.gdt", "GDT initialized");
 
 	GdtTssInit(ReadStackPointer());
-	LogOk("ARCH", "TSS initialized");
+	LogTrace("core.arch.tss", "TSS initialized");
 
 	IdtInit();
-	LogOk("ARCH", "IDT initialized");
+	LogOk("core.arch.idt", "IDT initialized");
 
 	if (!PageDbInit(Info->MemoryMap, Info->MemoryMapEntriesCount,
 					Info->HhdmOffset)) {
-		LogFatal("PAGEDB", "failed to initialize page database");
+		LogFatal("core.mm.pagedb", "failed to initialize page database");
 		for (;;)
 			__asm__ volatile("hlt");
 	}
+	LogOk("core.mm.pagedb", "page database online");
 
 	if (!PmmInit(Info->HhdmOffset)) {
-		LogFatal("PMM", "failed to initialize physical memory manager");
+		LogFatal("core.mm.pmm", "failed to initialize physical memory manager");
 		for (;;)
 			__asm__ volatile("hlt");
 	}
+	LogOk("core.mm.pmm", "physical memory manager online");
 
 	BootInfoPhysical = (uint64_t)(uintptr_t)Info;
 
 	uint64_t StackBase = PmmAllocPagesPhys(KernelStackPages);
 	if (StackBase == 0) {
-		LogFatal("ENTRY", "failed to allocate kernel stack");
+		LogFatal("core.sys.entry", "failed to allocate kernel stack");
 		for (;;)
 			__asm__ volatile("hlt");
 	}
 
-	LogInfo("ENTRY", "switching to kernel stack 0x%llx",
-			(unsigned long long)(StackBase + (KernelStackPages * PageSize)));
+	LogDebug("core.sys.entry", "switching to kernel stack 0x%llx",
+			 (unsigned long long)(StackBase + (KernelStackPages * PageSize)));
 	if (!PagingInit(Info, StackBase + (KernelStackPages * PageSize))) {
-		LogFatal("PAGING", "failed to initialize kernel page tables");
+		LogFatal("core.mm.paging", "failed to initialize kernel page tables");
 		for (;;)
 			__asm__ volatile("hlt");
 	}
@@ -158,27 +161,21 @@ void KernelMain(const BootInfo *Info)
 	}
 	Info = (const BootInfo *)(uintptr_t)InfoAddress;
 	if (Info == 0 || Info->Magic != BootInfoMagic) {
-		LogFatal("PAGING", "failed to map boot info");
+		LogFatal("core.mm.paging", "failed to map boot info");
 		for (;;)
 			__asm__ volatile("hlt");
 	}
 
-	LogOk("PAGING", "kernel page tables active");
+	LogOk("core.mm.paging", "kernel page tables active");
 
 	VmmInit();
+	LogOk("core.mm.vmm", "virtual memory manager online");
 	if (!HeapInit()) {
-		LogFatal("HEAP", "failed to initialize kernel heap");
+		LogFatal("core.mm.heap", "failed to initialize kernel heap");
 		for (;;)
 			__asm__ volatile("hlt");
 	}
-	LogOk("HEAP", "kernel heap online");
-
-	uint64_t *a = KernelAlloc(1);
-	LogInfo("TEST", "Allocated 1 byte at %p using kernel heap", a);
-	*a = 42;
-	LogInfo("TEST", "Wrote %d to %p", *a, a);
-	KernelFree(a);
-	LogInfo("TEST", "Freed using heap!");
+	LogOk("core.mm.heap", "kernel heap online");
 
 	for (;;) {
 		__asm__ volatile("hlt");

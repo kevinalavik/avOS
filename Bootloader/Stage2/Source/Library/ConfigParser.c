@@ -124,6 +124,46 @@ bool ParseFramebufferEnabled(const char *Config)
 	return true;
 }
 
+bool ParseCmdline(const char *Config, char Cmdline[BootCmdlineMax])
+{
+	while (*Config != '\0') {
+		Config = SkipWhitespace(Config);
+
+		if (*Config == '#') {
+			Config = SkipCommentOrUnknownLine(Config);
+			continue;
+		}
+
+		if (StringStartsWith(Config, CmdlineConfigKey)) {
+			Config += sizeof(CmdlineConfigKey) - 1u;
+			size_t Length = 0;
+
+			while (Config[Length] != '\0' &&
+				   !IsLineBreak(Config[Length])) {
+				if (Length + 1u >= BootCmdlineMax) {
+					return false;
+				}
+
+				Cmdline[Length] = Config[Length];
+				++Length;
+			}
+
+			while (Length > 0 && (Cmdline[Length - 1u] == ' ' ||
+								  Cmdline[Length - 1u] == '\t')) {
+				--Length;
+			}
+
+			Cmdline[Length] = '\0';
+			return true;
+		}
+
+		Config = SkipCommentOrUnknownLine(Config);
+	}
+
+	Cmdline[0] = '\0';
+	return true;
+}
+
 bool ReadTextFile(const char *Path, char **BufferOut)
 {
 	File FileHandle;

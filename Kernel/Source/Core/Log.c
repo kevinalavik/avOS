@@ -3,7 +3,9 @@
 
 #include <stdarg.h>
 
-static LogLevel MinLevel = LogLevelInfo;
+#define ESC "\033"
+
+static LogLevel MinLevel = LogLevelWarn;
 
 typedef struct LogStyle {
 	const char *Label;
@@ -11,14 +13,16 @@ typedef struct LogStyle {
 } LogStyle;
 
 static const LogStyle LogStyles[] = {
-	[LogLevelTrace] = { "TRACE", "\033[90m" },
-	[LogLevelDebug] = { "DEBUG", "\033[90m" },
-	[LogLevelInfo] = { "INFO", "\033[96m" },
-	[LogLevelOk] = { " OK ", "\033[92m" },
-	[LogLevelWarn] = { "WARN", "\033[93m" },
-	[LogLevelError] = { "ERROR", "\033[91m" },
-	[LogLevelFatal] = { "FATAL", "\033[1;91m" },
+	[LogLevelTrace] = { "trace", ESC "[90m" },
+	[LogLevelDebug] = { "debug", ESC "[94m" },
+	[LogLevelInfo]  = { "info",  ESC "[97m" },
+	[LogLevelOk]    = { "ok",    ESC "[92m" },
+	[LogLevelWarn]  = { "warn",  ESC "[93m" },
+	[LogLevelError] = { "error", ESC "[91m" },
+	[LogLevelFatal] = { "fatal", ESC "[1;91m" },
 };
+
+#define RESET ESC "[0m"
 
 static LogLevel NormalizeLevel(LogLevel Level)
 {
@@ -28,28 +32,86 @@ static LogLevel NormalizeLevel(LogLevel Level)
 	return Level;
 }
 
+static int ParseLoglevel(const char *Cmdline)
+{
+	const char *p = Cmdline;
+
+	while (*p != '\0') {
+		const char *start = p;
+
+		while (*p != '\0' && *p != ' ' && *p != '\t' && *p != '=')
+			++p;
+
+		if ((p - start) >= 8) {
+			const char *tail = p - 8;
+			int match = 1;
+
+			for (int i = 0; i < 8; ++i) {
+				if (tail[i] != "loglevel"[i]) {
+					match = 0;
+					break;
+				}
+			}
+
+			if (match) {
+				while (*p == ' ' || *p == '\t' || *p == '=')
+					++p;
+
+				int value = 0;
+				while (*p >= '0' && *p <= '9') {
+					value = value * 10 + (*p - '0');
+					++p;
+				}
+				return value;
+			}
+		}
+
+		if (*p != '\0')
+			++p;
+	}
+
+	return -1;
+}
+
+int LogShouldWrite(LogLevel Level)
+{
+	return NormalizeLevel(Level) >= MinLevel;
+}
+
 static void LogVWrite(LogLevel Level, const char *Component, const char *Format,
 					  va_list Arguments)
 {
 	Level = NormalizeLevel(Level);
 	const LogStyle *Style = &LogStyles[Level];
 
-	if (Level < MinLevel)
+	if (!LogShouldWrite(Level))
 		return;
 
-	Printf("%s[%s]\033[0m", Style->Color, Style->Label);
 	if (Component != 0 && Component[0] != '\0') {
-		Printf(" \033[97m%s:\033[0m", Component);
+		Printf("[%s] ", Component);
 	}
 
-	Printf(" ");
+	Printf("%s%s" RESET ": ", Style->Color, Style->Label);
 	VPrintf(Format, Arguments);
 	Printf("\n");
 }
 
-void LogInit(void)
+void LogInit(const char *Cmdline)
 {
-	MinLevel = LogLevelInfo;
+	int level = -1;
+
+	if (Cmdline != 0)
+		level = ParseLoglevel(Cmdline);
+
+	if (level >= LogLevelTrace && level <= LogLevelFatal)
+		MinLevel = (LogLevel)level;
+	else
+		MinLevel = LogLevelWarn;
+}
+
+LogLevel LogGetLevel(void)
+{
+	return MinLevel;
 }
 
 void LogSetLevel(LogLevel Level)

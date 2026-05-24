@@ -1,6 +1,6 @@
 #include <Filesystem/Vfs.h>
 
-#include <Library/Log.h>
+#include <Library/DebugLog.h>
 
 #define VfsRootPrefix "/"
 
@@ -11,14 +11,14 @@ static bool RootMounted;
 bool VfsMountRoot(const VfsFilesystemOps *Ops, void *Filesystem)
 {
 	if (Ops == 0 || Ops->Open == 0 || Ops->Read == 0 || Filesystem == 0) {
-		LogError("VFS", "root mount rejected: invalid argument");
+		BootError("VFS", "root mount rejected: invalid argument");
 		return false;
 	}
 
 	RootOps = Ops;
 	RootFilesystem = Filesystem;
 	RootMounted = true;
-	LogDebug("VFS", "mounted root /");
+	DebugLog("VFS", "mounted root /");
 	return true;
 }
 
@@ -35,29 +35,29 @@ const char *VfsBootPath(void)
 bool FileOpen(const char *Path, File *Handle)
 {
 	if (Handle == 0) {
-		LogError("VFS", "open rejected: null file handle");
+		BootError("VFS", "open rejected: null file handle");
 		return false;
 	}
 
 	FileClose(Handle);
 
 	if (!RootMounted) {
-		LogError("VFS", "open rejected: no root filesystem");
+		BootError("VFS", "open rejected: no root filesystem");
 		return false;
 	}
 
 	if (Path == 0 || Path[0] != '/') {
-		LogWarn("VFS", "unsupported path '%s'", Path != 0 ? Path : "");
+		DebugLog("VFS", "unsupported path '%s'", Path != 0 ? Path : "");
 		return false;
 	}
 
 	if (!RootOps->Open(RootFilesystem, Path, &Handle->Node)) {
-		LogWarn("VFS", "file not found '%s'", Path);
+		DebugLog("VFS", "file not found '%s'", Path);
 		return false;
 	}
 
 	if (Handle->Node.Directory) {
-		LogWarn("VFS", "path is a directory '%s'", Path);
+		DebugLog("VFS", "path is a directory '%s'", Path);
 		return false;
 	}
 
@@ -65,7 +65,7 @@ bool FileOpen(const char *Path, File *Handle)
 	Handle->Filesystem = RootFilesystem;
 	Handle->Position = 0;
 	Handle->Open = true;
-	LogDebug("VFS", "opened '%s' (%u bytes)", Path,
+	DebugLog("VFS", "opened '%s' (%u bytes)", Path,
 			 (unsigned int)Handle->Node.Size);
 	return true;
 }
@@ -85,12 +85,12 @@ size_t FileRead(File *Handle, void *Buffer, size_t Length)
 bool FileSeek(File *Handle, size_t Position)
 {
 	if (!FileIsOpen(Handle)) {
-		LogWarn("VFS", "seek rejected: file not open");
+		DebugLog("VFS", "seek rejected: file not open");
 		return false;
 	}
 
 	if (Position > Handle->Node.Size) {
-		LogWarn("VFS", "seek past EOF: %u > %u", (unsigned int)Position,
+		DebugLog("VFS", "seek past EOF: %u > %u", (unsigned int)Position,
 				(unsigned int)Handle->Node.Size);
 		return false;
 	}

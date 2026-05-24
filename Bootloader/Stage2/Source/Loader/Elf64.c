@@ -1,7 +1,7 @@
 #include <Loader/Elf64.h>
 
 #include <Filesystem/Vfs.h>
-#include <Library/Log.h>
+#include <Library/DebugLog.h>
 #include <Memory/Allocator.h>
 
 #define ElfMagic0 0x7fu
@@ -180,7 +180,7 @@ bool Elf64Load(const char *Path, uint64_t *EntryAddress)
 
 	const Elf64Header *Header = (const Elf64Header *)FileBuffer;
 	if (!IsValidHeader(Header, FileSizeBytes)) {
-		LogError("ELF64", "invalid kernel ELF '%s'", Path);
+		BootError("ELF64", "invalid kernel ELF '%s'", Path);
 		return false;
 	}
 
@@ -188,7 +188,7 @@ bool Elf64Load(const char *Path, uint64_t *EntryAddress)
 		(uint64_t)Header->ProgramHeaderCount * Header->ProgramHeaderEntrySize;
 	if (!RangeFits(Header->ProgramHeaderOffset, ProgramHeaders,
 				   FileSizeBytes)) {
-		LogError("ELF64", "program header table out of range");
+		BootError("ELF64", "program header table out of range");
 		return false;
 	}
 
@@ -209,7 +209,7 @@ bool Elf64Load(const char *Path, uint64_t *EntryAddress)
 			!PhysicalRangeFits(PhysicalAddress, ProgramHeader->MemorySize) ||
 			!RangeFits(ProgramHeader->Offset, ProgramHeader->FileSize,
 					   FileSizeBytes)) {
-			LogError("ELF64", "bad load segment %u", (unsigned int)Index);
+			BootError("ELF64", "bad load segment %u", (unsigned int)Index);
 			return false;
 		}
 
@@ -229,7 +229,7 @@ bool Elf64Load(const char *Path, uint64_t *EntryAddress)
 			LoadEnd = SegmentEnd;
 		}
 
-		LogDebug("ELF64", "segment %u virt 0x%08x%08x phys 0x%08x mem %u",
+		DebugLog("ELF64", "segment %u virt 0x%08x%08x phys 0x%08x mem %u",
 				 (unsigned int)Index,
 				 (unsigned int)(ProgramHeader->VirtualAddress >> 32),
 				 (unsigned int)ProgramHeader->VirtualAddress,
@@ -240,7 +240,7 @@ bool Elf64Load(const char *Path, uint64_t *EntryAddress)
 	LoadedBase = LoadBase;
 	LoadedEnd = LoadEnd;
 	*EntryAddress = Header->Entry;
-	LogOk("ELF64", "entry 0x%08x%08x", (unsigned int)(Header->Entry >> 32),
+	DebugLog("ELF64", "entry 0x%08x%08x", (unsigned int)(Header->Entry >> 32),
 		  (unsigned int)Header->Entry);
 	return true;
 }

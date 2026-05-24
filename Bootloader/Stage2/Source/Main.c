@@ -1,3 +1,4 @@
+#include <Architecture/Acpi.h>
 #include <Architecture/LongMode.h>
 #include <Boot/BootInfo.h>
 #include <Device/Console.h>
@@ -7,7 +8,7 @@
 #include <Filesystem/Vfs.h>
 #include <Library/ConfigParser.h>
 #include <Library/Framebuffer.h>
-#include <Library/Log.h>
+#include <Library/DebugLog.h>
 #include <Loader/Elf64.h>
 #include <Memory/Allocator.h>
 #include <Memory/MemoryMap.h>
@@ -76,7 +77,7 @@ static bool AppendMemoryMapEntry(BootMemoryMapEntry *Entries,
 	}
 
 	if (*EntriesCount >= BootMemoryMapMaxEntries) {
-		LogWarn("MEM", "dropping memory map entry 0x%08x%08x-0x%08x%08x",
+		DebugLog("MEM", "dropping memory map entry 0x%08x%08x-0x%08x%08x",
 				(unsigned int)(Base >> 32), (unsigned int)Base,
 				(unsigned int)(End >> 32), (unsigned int)End);
 		return false;
@@ -115,8 +116,7 @@ static uint32_t CopyMemoryMap(BootInfo *Info, const MemoryMap *Map)
 }
 
 static void ReserveMemoryMapRange(BootInfo *Info, uint32_t *EntriesCount,
-								  uint64_t Base, uint64_t End,
-								  const char *Name)
+								  uint64_t Base, uint64_t End, const char *Name)
 {
 	if (End <= Base || *EntriesCount == 0) {
 		return;
@@ -159,7 +159,7 @@ static void ReserveMemoryMapRange(BootInfo *Info, uint32_t *EntriesCount,
 	}
 
 	*EntriesCount = NewEntriesCount;
-	LogInfo("MEM", "reserved %s: 0x%08x%08x-0x%08x%08x", Name,
+	DebugLog("MEM", "reserved %s: 0x%08x%08x-0x%08x%08x", Name,
 			(unsigned int)(Base >> 32), (unsigned int)Base,
 			(unsigned int)(End >> 32), (unsigned int)End);
 }
@@ -183,13 +183,14 @@ static void ReserveBootloaderMemory(BootInfo *Info, uint32_t *EntriesCount)
 
 	if (AllocatorAllocatedRange(&AllocatedBase, &AllocatedEnd)) {
 		ReserveMemoryMapRange(Info, EntriesCount, (uint64_t)AllocatedBase,
-							  (uint64_t)AllocatedEnd,
-							  "bootloader allocations");
+							  (uint64_t)AllocatedEnd, "bootloader allocs");
 	}
 }
 
 static BootInfo *CreateBootInfo(const MemoryMap *Map, uint64_t KernelEntry,
-								const char *KernelPath)
+								const char *KernelPath,
+								const char *Cmdline,
+								const AcpiRootPointers *AcpiRoots)
 {
 	BootInfo *Info = Alloc(sizeof(BootInfo), 16);
 	if (Info == 0) {
@@ -201,7 +202,11 @@ static BootInfo *CreateBootInfo(const MemoryMap *Map, uint64_t KernelEntry,
 	Info->Size = sizeof(BootInfo);
 	Info->KernelEntry = KernelEntry;
 	Info->HhdmOffset = PagingGetHhdmOffset();
+	Info->AcpiRsdpAddress = AcpiRoots->RsdpAddress;
+	Info->AcpiRsdtAddress = AcpiRoots->RsdtAddress;
+	Info->AcpiXsdtAddress = AcpiRoots->XsdtAddress;
 	CopyString(Info->KernelPath, sizeof(Info->KernelPath), KernelPath);
+	CopyString(Info->Cmdline, sizeof(Info->Cmdline), Cmdline);
 	Info->MemoryMapEntriesCount = CopyMemoryMap(Info, Map);
 	ReserveBootloaderMemory(Info, &Info->MemoryMapEntriesCount);
 
@@ -217,81 +222,87 @@ static BootInfo *CreateBootInfo(const MemoryMap *Map, uint64_t KernelEntry,
 void S2Entry(void)
 {
 	ConsoleInit();
-	LogOk("ENTRY", "avOS kernel loader v1.0!");
+	DebugLog("ENTRY", "avOS kernel loader v1.0!");
 
 	const MemoryMap *Map = MemoryMapGetBoot();
 	MemoryMapLog(Map);
 	if (!AllocatorInit(Map)) {
-		LogError("ENTRY", "allocator unavailable");
+		BootError("ENTRY", "allocator unavailable");
 		goto halt;
 	}
 
 	if (!DiskInit()) {
-		LogError("BIOS", "disk init failed");
+		BootError("BIOS", "disk init failed");
 		goto halt;
 	}
-	LogOk("BIOS", "INT 13h disk ready");
+	DebugLog("BIOS", "INT 13h disk ready");
 
 	Fat32Volume *Volume = Alloc(sizeof(Fat32Volume), 16);
 	if (Volume == 0) {
-		LogError("FAT32", "failed to allocate volume");
+		BootError("FAT32", "failed to allocate volume");
 		goto halt;
 	}
 
 	if (!Fat32Mount(Volume, DiskGetDevice())) {
-		LogError("FAT32", "mount failed");
+		BootError("FAT32", "mount failed");
 		goto halt;
 	}
 
-	LogOk("FAT32", "mounted partition LBA %u, root cluster %u",
+	DebugLog("FAT32", "mounted partition LBA %u, root cluster %u",
 		  (unsigned int)Volume->PartitionLba,
 		  (unsigned int)Volume->RootCluster);
 
 	if (!VfsMountRoot(Fat32GetFilesystemOps(), Volume)) {
-		LogError("ENTRY", "failed to mount root");
+		BootError("ENTRY", "failed to mount root");
 		goto halt;
 	}
 
-	LogOk("ENTRY", "mounted %s", VfsRootPath());
+	DebugLog("ENTRY", "mounted %s", VfsRootPath());
 
 	char *BootConfig;
 	if (!ReadTextFile(BootConfigPath, &BootConfig)) {
-		LogError("ENTRY", "failed to read %s", BootConfigPath);
+		BootError("ENTRY", "failed to read %s", BootConfigPath);
 		goto halt;
 	}
 
 	char KernelPath[BootPathMax];
 	if (!ParseKernelPath(BootConfig, KernelPath)) {
-		LogError("ENTRY", "missing kernel in %s", BootConfigPath);
+		BootError("ENTRY", "missing kernel in %s", BootConfigPath);
 		goto halt;
 	}
 
 	bool FramebufferEnabled = ParseFramebufferEnabled(BootConfig);
 
-	uint64_t KernelEntry;
-	if (!Elf64Load(KernelPath, &KernelEntry)) {
-		LogError("ENTRY", "failed to load kernel ELF '%s'", KernelPath);
+	char Cmdline[BootCmdlineMax];
+	if (!ParseCmdline(BootConfig, Cmdline)) {
+		BootError("ENTRY", "cmdline too long in %s", BootConfigPath);
 		goto halt;
 	}
 
-	BootInfo *Info = CreateBootInfo(Map, KernelEntry, KernelPath);
+	uint64_t KernelEntry;
+	if (!Elf64Load(KernelPath, &KernelEntry)) {
+		BootError("ENTRY", "failed to load kernel ELF '%s'", KernelPath);
+		goto halt;
+	}
+
+	AcpiRootPointers AcpiRoots = AcpiFindRootPointers();
+
+	BootInfo *Info = CreateBootInfo(Map, KernelEntry, KernelPath, Cmdline, &AcpiRoots);
 	if (Info == 0) {
-		LogError("ENTRY", "failed to allocate boot info");
+		BootError("ENTRY", "failed to allocate boot info");
 		goto halt;
 	}
 
 	if (FramebufferEnabled) {
 		FramebufferInit(Info);
 	} else {
-		LogInfo("FB", "disabled by config; keeping 80x25 text mode");
+		DebugLog("FB", "disabled by config; keeping 80x25 text mode");
 	}
 
 	uint32_t PageMap = PagingBuildKernelMap(&Info->Framebuffer);
-	LogOk("ENTRY", "loaded kernel '%s'", KernelPath);
+	DebugLog("ENTRY", "loaded kernel '%s'", KernelPath);
 
-	LogOk("ENTRY", "entering long mode");
-	ConsolePrint(
-		"--------------------------------------------------------------------------------");
+	DebugLog("ENTRY", "entering long mode");
 	EnterLongMode(PageMap, KernelEntry, (uint32_t)Info);
 
 halt:

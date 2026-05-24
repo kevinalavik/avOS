@@ -8,7 +8,24 @@ STAGE2_SOURCE_DIR := Stage2/Source
 STAGE2_INCLUDE_DIR := Stage2/Include
 COMMON_SOURCE_DIR := ../Common/Source
 COMMON_INCLUDE_DIR := ../Common/Include
-LOG_LEVEL ?= info
+DEBUG ?= 1
+BOOTLOADER_DEBUG := 0
+
+ifeq ($(DEBUG),1)
+BOOTLOADER_DEBUG := 1
+endif
+
+ifeq ($(DEBUG),yes)
+BOOTLOADER_DEBUG := 1
+endif
+
+ifeq ($(DEBUG),true)
+BOOTLOADER_DEBUG := 1
+endif
+
+ifeq ($(DEBUG),DEBUG)
+BOOTLOADER_DEBUG := 1
+endif
 
 BOOTSTRAP_SRC := Bootstrap/Source/Bootstrap.asm
 BOOTSTRAP_BIN := $(BUILD_DIR)/bootstrap.bin
@@ -28,24 +45,8 @@ COMMON_C_OBJS := $(COMMON_C_SRCS:$(COMMON_SOURCE_DIR)/%.c=$(BUILD_DIR)/Common/%.
 STAGE2_OBJS := $(STAGE2_ASM_OBJS) $(STAGE2_C_OBJS) $(COMMON_C_OBJS)
 DEPS := $(BOOTSTRAP_DEP) $(STAGE2_OBJS:.o=.d)
 
-LOG_LEVEL_VALUE_debug := LogLevelDebug
-LOG_LEVEL_VALUE_info := LogLevelInfo
-LOG_LEVEL_VALUE_ok := LogLevelOk
-LOG_LEVEL_VALUE_warn := LogLevelWarn
-LOG_LEVEL_VALUE_error := LogLevelError
-LOG_LEVEL_VALUE_DEBUG := LogLevelDebug
-LOG_LEVEL_VALUE_INFO := LogLevelInfo
-LOG_LEVEL_VALUE_OK := LogLevelOk
-LOG_LEVEL_VALUE_WARN := LogLevelWarn
-LOG_LEVEL_VALUE_ERROR := LogLevelError
-STAGE2_LOG_LEVEL := $(LOG_LEVEL_VALUE_$(LOG_LEVEL))
-
-ifeq ($(STAGE2_LOG_LEVEL),)
-$(error Unsupported LOG_LEVEL '$(LOG_LEVEL)'; use debug, info, ok, warn, or error)
-endif
-
 CFLAGS ?= -m32 -I$(COMMON_INCLUDE_DIR) -I$(STAGE2_INCLUDE_DIR) -ffreestanding -fno-pic -fno-pie -fno-stack-protector -fno-asynchronous-unwind-tables -nostdlib -Wall -Wextra
-CFLAGS += -DLogLevelThreshold=$(STAGE2_LOG_LEVEL)
+CFLAGS += -DBOOTLOADER_DEBUG=$(BOOTLOADER_DEBUG)
 
 .PHONY: all clean
 

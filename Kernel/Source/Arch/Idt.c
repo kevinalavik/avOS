@@ -68,7 +68,7 @@ void IdtHandle(Frame *Frame)
 		Panic(Frame, ExceptionName(Frame->vector));
 	}
 
-	LogWarn("IDT", "unhandled IRQ vector=%llu",
+	LogWarn("core.arch.idt", "unhandled IRQ vector=%llu",
 			(unsigned long long)Frame->vector);
 }
 

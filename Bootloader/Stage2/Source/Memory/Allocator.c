@@ -1,6 +1,6 @@
 #include <Memory/Allocator.h>
 
-#include <Library/Log.h>
+#include <Library/DebugLog.h>
 
 #define AllocatorMinBase 0x00200000u
 #define AllocatorDefaultAlignment 16u
@@ -35,7 +35,7 @@ bool AllocatorInit(const MemoryMap *Map)
 		AlignUp((uintptr_t)&__stage2_end, AllocatorDefaultAlignment);
 
 	if (Map == 0) {
-		LogError("ALLOC", "init rejected: missing memory map");
+		BootError("ALLOC", "init rejected: missing memory map");
 		return false;
 	}
 
@@ -79,14 +79,14 @@ bool AllocatorInit(const MemoryMap *Map)
 	}
 
 	if (BestBase == 0) {
-		LogError("ALLOC", "no usable heap range found");
+		BootError("ALLOC", "no usable heap range found");
 		return false;
 	}
 
 	HeapBase = BestBase;
 	HeapCursor = BestBase;
 	HeapEnd = BestEnd;
-	LogInfo("ALLOC", "heap 0x%08x-0x%08x (%u KiB)", (unsigned int)HeapCursor,
+	DebugLog("ALLOC", "heap 0x%08x-0x%08x (%u KiB)", (unsigned int)HeapCursor,
 			(unsigned int)HeapEnd,
 			(unsigned int)((HeapEnd - HeapCursor) / 1024u));
 	return true;
@@ -104,7 +104,7 @@ void *Alloc(size_t Size, size_t Alignment)
 
 	uintptr_t Address = AlignUp(HeapCursor, Alignment);
 	if (Address > HeapEnd || Size > (HeapEnd - Address)) {
-		LogWarn("ALLOC", "out of memory allocating %u bytes",
+		DebugLog("ALLOC", "out of memory allocating %u bytes",
 				(unsigned int)Size);
 		return 0;
 	}
