@@ -6,5 +6,6 @@
 
 uint32_t PagingBuildKernelMap(const BootFramebuffer *Framebuffer);
 uint64_t PagingGetHhdmOffset(void);
+uint64_t PagingGetKernelPhysicalBase(void);
 
 #endif

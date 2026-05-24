@@ -15,6 +15,7 @@
 #define ElfMachineX86_64 62u
 #define ElfProgramLoad 1u
 #define ElfHigherHalfBase 0xffffffff80000000ull
+#define ElfHigherHalfPhysicalBase 0x400000ull
 #define ElfHigherHalfMappedSize 0x40000000ull
 
 static uint64_t LoadedBase;
@@ -107,7 +108,8 @@ static bool TranslateHigherHalfAddress(uint64_t Address,
 		return false;
 	}
 
-	*PhysicalAddress = (uint32_t)(Address - ElfHigherHalfBase);
+	*PhysicalAddress =
+		(uint32_t)((Address - ElfHigherHalfBase) + ElfHigherHalfPhysicalBase);
 	return true;
 }
 

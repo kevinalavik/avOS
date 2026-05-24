@@ -8,6 +8,8 @@
 
 #define KernelVirtualBase 0xffffffff80000000ull
 #define PageTableEntries 512u
+
+static uint64_t KernelPhysBase;
 #define PageTableIndexMask 0x1ffull
 #define PageAddressMask 0x000ffffffffff000ull
 #define PageHuge1GAddressMask 0x000fffffc0000000ull
@@ -63,7 +65,7 @@ static void InvalidatePage(uint64_t Address)
 
 static uint64_t KernelVirtToPhys(uint64_t Address)
 {
-	return Address - KernelVirtualBase;
+	return Address - KernelVirtualBase + KernelPhysBase;
 }
 
 static uint64_t *TableFromPhys(uint64_t PhysicalAddress)
@@ -387,6 +389,8 @@ static bool MapFramebuffer(const BootFramebuffer *Framebuffer)
 
 uint64_t PagingBuild(const BootInfo *Info)
 {
+	KernelPhysBase = Info->KernelPhysicalBase;
+
 	RootTablePhys = AllocTable();
 	if (RootTablePhys == 0) {
 		LogError("core.mm.paging", "failed to allocate root table");

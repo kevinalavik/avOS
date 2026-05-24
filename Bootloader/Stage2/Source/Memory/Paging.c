@@ -59,6 +59,8 @@ static bool RangeEnd(uint64_t Base, uint64_t Size, uint64_t *EndOut)
 	return true;
 }
 
+#define KernelPhysicalBase 0x400000ull
+
 static void MapKernelHigherHalf1G(void)
 {
 	PageMapLevel4[HigherHalfPml4Index] =
@@ -68,7 +70,8 @@ static void MapKernelHigherHalf1G(void)
 		(uint32_t)KernelPageDirectory | PagePresent | PageWritable;
 
 	for (uint32_t Index = 0; Index < PageTableEntries; ++Index) {
-		uint64_t PhysicalBase = (uint64_t)Index * PageSize2M;
+		uint64_t PhysicalBase =
+			KernelPhysicalBase + (uint64_t)Index * PageSize2M;
 		KernelPageDirectory[Index] =
 			PhysicalBase | PagePresent | PageWritable | PageHuge;
 	}
@@ -180,4 +183,9 @@ uint32_t PagingBuildKernelMap(const BootFramebuffer *Framebuffer)
 uint64_t PagingGetHhdmOffset(void)
 {
 	return BootHhdmOffset;
+}
+
+uint64_t PagingGetKernelPhysicalBase(void)
+{
+	return KernelPhysicalBase;
 }
