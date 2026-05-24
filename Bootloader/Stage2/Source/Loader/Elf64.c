@@ -17,6 +17,9 @@
 #define ElfHigherHalfBase 0xffffffff80000000ull
 #define ElfHigherHalfMappedSize 0x40000000ull
 
+static uint64_t LoadedBase;
+static uint64_t LoadedEnd;
+
 typedef struct Elf64Header {
 	uint8_t Ident[16];
 	uint16_t Type;
@@ -146,10 +149,29 @@ static void ClearMemory(uint8_t *Destination, size_t Length)
 	}
 }
 
+bool Elf64LoadedRange(uint64_t *BaseOut, uint64_t *EndOut)
+{
+	if (LoadedEnd <= LoadedBase) {
+		return false;
+	}
+
+	if (BaseOut != 0) {
+		*BaseOut = LoadedBase;
+	}
+
+	if (EndOut != 0) {
+		*EndOut = LoadedEnd;
+	}
+
+	return true;
+}
+
 bool Elf64Load(const char *Path, uint64_t *EntryAddress)
 {
 	uint8_t *FileBuffer;
 	size_t FileSizeBytes;
+	uint64_t LoadBase = UINT64_MAX;
+	uint64_t LoadEnd = 0;
 
 	if (EntryAddress == 0 ||
 		!ReadWholeFile(Path, &FileBuffer, &FileSizeBytes)) {
@@ -198,6 +220,15 @@ bool Elf64Load(const char *Path, uint64_t *EntryAddress)
 			Destination + ProgramHeader->FileSize,
 			(size_t)(ProgramHeader->MemorySize - ProgramHeader->FileSize));
 
+		uint64_t SegmentEnd =
+			(uint64_t)PhysicalAddress + ProgramHeader->MemorySize;
+		if ((uint64_t)PhysicalAddress < LoadBase) {
+			LoadBase = PhysicalAddress;
+		}
+		if (SegmentEnd > LoadEnd) {
+			LoadEnd = SegmentEnd;
+		}
+
 		LogDebug("ELF64", "segment %u virt 0x%08x%08x phys 0x%08x mem %u",
 				 (unsigned int)Index,
 				 (unsigned int)(ProgramHeader->VirtualAddress >> 32),
@@ -206,6 +237,8 @@ bool Elf64Load(const char *Path, uint64_t *EntryAddress)
 				 (unsigned int)ProgramHeader->MemorySize);
 	}
 
+	LoadedBase = LoadBase;
+	LoadedEnd = LoadEnd;
 	*EntryAddress = Header->Entry;
 	LogOk("ELF64", "entry 0x%08x%08x", (unsigned int)(Header->Entry >> 32),
 		  (unsigned int)Header->Entry);

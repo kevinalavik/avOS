@@ -4,9 +4,11 @@
 #include <stdint.h>
 
 #define BootInfoMagic 0x41564f53u
-#define BootInfoVersion 3u
+#define BootInfoVersion 4u
 #define BootInfoKernelPathSize 128u
 #define BootMemoryMapMaxEntries 32u
+#define BootHhdmOffset 0xffff800000000000ull
+#define BootHhdmMappedSize 0x100000000ull
 #define BootFramebufferWidth 1024
 #define BootFramebufferHeight 768
 #define BootFramebufferBpp 32
@@ -40,6 +42,7 @@ typedef struct BootInfo {
 	uint32_t Size;
 	uint32_t MemoryMapEntriesCount;
 	uint64_t KernelEntry;
+	uint64_t HhdmOffset;
 	char KernelPath[BootInfoKernelPathSize];
 	BootMemoryMapEntry MemoryMap[BootMemoryMapMaxEntries];
 	BootFramebuffer Framebuffer;

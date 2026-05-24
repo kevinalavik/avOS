@@ -11,8 +11,10 @@
 #define PageSize1G 0x40000000ull
 #define PageTableEntries 512u
 #define IdentityPdptEntries 4u
+#define HhdmPdptEntries 4u
 #define HigherHalfPdptIndex 510u
 #define HigherHalfPml4Index 511u
+#define HhdmPml4Index 256u
 #define LowIdentityMappedSize PageSize1G
 
 static uint64_t PageMapLevel4[PageTableEntries] __attribute__((aligned(4096)));
@@ -20,8 +22,12 @@ static uint64_t IdentityPageDirectoryPointerTable[PageTableEntries]
 	__attribute__((aligned(4096)));
 static uint64_t HigherHalfPageDirectoryPointerTable[PageTableEntries]
 	__attribute__((aligned(4096)));
+static uint64_t HhdmPageDirectoryPointerTable[PageTableEntries]
+	__attribute__((aligned(4096)));
 
 static uint64_t IdentityPageDirectories[IdentityPdptEntries][PageTableEntries]
+	__attribute__((aligned(4096)));
+static uint64_t HhdmPageDirectories[HhdmPdptEntries][PageTableEntries]
 	__attribute__((aligned(4096)));
 static uint64_t KernelPageDirectory[PageTableEntries]
 	__attribute__((aligned(4096)));
@@ -65,6 +71,36 @@ static void MapKernelHigherHalf1G(void)
 		uint64_t PhysicalBase = (uint64_t)Index * PageSize2M;
 		KernelPageDirectory[Index] =
 			PhysicalBase | PagePresent | PageWritable | PageHuge;
+	}
+}
+
+static void MapHhdm2M(uint64_t PhysicalBase)
+{
+	uint32_t PdptIndex = (uint32_t)(PhysicalBase / PageSize1G);
+	uint32_t PdIndex = (uint32_t)((PhysicalBase % PageSize1G) / PageSize2M);
+
+	if (PdptIndex >= HhdmPdptEntries) {
+		return;
+	}
+
+	HhdmPageDirectoryPointerTable[PdptIndex] =
+		(uint32_t)HhdmPageDirectories[PdptIndex] | PagePresent | PageWritable;
+	HhdmPageDirectories[PdptIndex][PdIndex] =
+		PhysicalBase | PagePresent | PageWritable | PageHuge;
+}
+
+static void MapHhdmRange(uint64_t Base, uint64_t Size)
+{
+	uint64_t End;
+	if (!RangeEnd(Base, Size, &End)) {
+		return;
+	}
+
+	uint64_t Page = AlignDown2M(Base);
+	uint64_t MappedEnd = AlignUp2M(End);
+
+	for (; Page < MappedEnd; Page += PageSize2M) {
+		MapHhdm2M(Page);
 	}
 }
 
@@ -117,24 +153,31 @@ uint32_t PagingBuildKernelMap(const BootFramebuffer *Framebuffer)
 	ClearTable(PageMapLevel4);
 	ClearTable(IdentityPageDirectoryPointerTable);
 	ClearTable(HigherHalfPageDirectoryPointerTable);
+	ClearTable(HhdmPageDirectoryPointerTable);
 	ClearTable(KernelPageDirectory);
 
 	for (uint32_t Index = 0; Index < IdentityPdptEntries; ++Index) {
 		ClearTable(IdentityPageDirectories[Index]);
 	}
+	for (uint32_t Index = 0; Index < HhdmPdptEntries; ++Index) {
+		ClearTable(HhdmPageDirectories[Index]);
+	}
 
 	PageMapLevel4[0] = (uint32_t)IdentityPageDirectoryPointerTable |
 					   PagePresent | PageWritable;
+	PageMapLevel4[HhdmPml4Index] =
+		(uint32_t)HhdmPageDirectoryPointerTable | PagePresent | PageWritable;
 
-	/* Keep the low 1 GiB identity-mapped for the long-mode trampoline,
-	 * the low stack, boot info, and early physical-memory references. */
 	MapIdentityRange(0, LowIdentityMappedSize, 0);
-
-	/* The framebuffer aperture may live outside the low identity window,
-	 * and it should be mapped uncached/write-through because it is MMIO. */
 	MapFramebufferIdentity(Framebuffer);
 
+	MapHhdmRange(0, BootHhdmMappedSize);
 	MapKernelHigherHalf1G();
 
 	return (uint32_t)PageMapLevel4;
+}
+
+uint64_t PagingGetHhdmOffset(void)
+{
+	return BootHhdmOffset;
 }

@@ -189,6 +189,13 @@ bool TextConsoleReady(void)
 	return Ready;
 }
 
+void TextConsoleSetBufferAddress(uint64_t Address)
+{
+	if (Address != 0) {
+		TextBuffer = (volatile uint16_t *)(uintptr_t)Address;
+	}
+}
+
 void TextConsolePutc(char Character)
 {
 	static char EscapeParameters[24];

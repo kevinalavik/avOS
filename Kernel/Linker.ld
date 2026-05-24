@@ -12,6 +12,7 @@ PHDRS
 SECTIONS
 {
     . = 0xffffffff80100000;
+    __kernel_start = .;
 
     .text : {
         __text_start = .;
@@ -30,13 +31,19 @@ SECTIONS
     . = ALIGN(0x1000);
 
     .data : {
+        __data_start = .;
         *(.data .data.*)
+        __data_end = .;
     } :data
 
     .bss : {
+        __bss_start = .;
         *(.bss .bss.*)
         *(COMMON)
+        __bss_end = .;
     } :data
+
+    __kernel_end = .;
 
     /DISCARD/ : {
         *(.eh_frame*)

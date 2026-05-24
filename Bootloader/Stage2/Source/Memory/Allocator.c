@@ -8,6 +8,7 @@
 extern uint8_t __stage2_end;
 
 static uintptr_t HeapCursor;
+static uintptr_t HeapBase;
 static uintptr_t HeapEnd;
 
 static uintptr_t AlignUp(uintptr_t Value, size_t Alignment)
@@ -82,6 +83,7 @@ bool AllocatorInit(const MemoryMap *Map)
 		return false;
 	}
 
+	HeapBase = BestBase;
 	HeapCursor = BestBase;
 	HeapEnd = BestEnd;
 	LogInfo("ALLOC", "heap 0x%08x-0x%08x (%u KiB)", (unsigned int)HeapCursor,
@@ -137,4 +139,21 @@ size_t AllocatorFreeBytes(void)
 	}
 
 	return HeapEnd - HeapCursor;
+}
+
+bool AllocatorAllocatedRange(uintptr_t *BaseOut, uintptr_t *EndOut)
+{
+	if (HeapBase == 0 || HeapCursor <= HeapBase) {
+		return false;
+	}
+
+	if (BaseOut != 0) {
+		*BaseOut = HeapBase;
+	}
+
+	if (EndOut != 0) {
+		*EndOut = HeapCursor;
+	}
+
+	return true;
 }

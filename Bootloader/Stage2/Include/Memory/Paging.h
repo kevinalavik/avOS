@@ -5,5 +5,6 @@
 #include <stdint.h>
 
 uint32_t PagingBuildKernelMap(const BootFramebuffer *Framebuffer);
+uint64_t PagingGetHhdmOffset(void);
 
 #endif

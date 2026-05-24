@@ -5,5 +5,6 @@
 #include <stdint.h>
 
 bool Elf64Load(const char *Path, uint64_t *EntryAddress);
+bool Elf64LoadedRange(uint64_t *BaseOut, uint64_t *EndOut);
 
 #endif
