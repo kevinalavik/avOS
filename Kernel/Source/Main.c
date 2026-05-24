@@ -112,6 +112,7 @@ void KernelMain(const BootInfo *Info)
 	} else {
 		LogDebug("core.acpi", "RSDP unavailable");
 	}
+	LogInfo("core.sys.entry", "Kernel cmdline=\"%s\"", Info->Cmdline);
 
 	GdtInit();
 	LogOk("core.arch.gdt", "GDT initialized");
