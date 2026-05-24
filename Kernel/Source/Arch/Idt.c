@@ -1,4 +1,5 @@
 #include <Arch/Idt.h>
+#include <Arch/Irq.h>
 #include <Core/Log.h>
 #include <Core/Panic.h>
 #include <Library/Printf.h>
@@ -68,8 +69,7 @@ void IdtHandle(Frame *Frame)
 		Panic(Frame, ExceptionName(Frame->vector));
 	}
 
-	LogWarn("core.arch.idt", "unhandled IRQ vector=%llu",
-			(unsigned long long)Frame->vector);
+	IrqDispatch(Frame);
 }
 
 static void IdtSetEntry(size_t Vector, void *Handler, uint8_t Ist,

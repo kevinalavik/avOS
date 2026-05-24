@@ -1,9 +1,13 @@
 #include <Acpi/Acpi.h>
+#include <Acpi/Madt.h>
 #include <Arch/Gdt.h>
 #include <Arch/Idt.h>
+#include <Arch/Irq.h>
 #include <Boot/BootInfo.h>
 #include <Core/Log.h>
 #include <Device/Framebuffer.h>
+#include <Device/Keyboard.h>
+#include <Device/Pit.h>
 #include <Device/Serial.h>
 #include <Device/TextConsole.h>
 #include <Library/Printf.h>
@@ -138,6 +142,13 @@ void KernelMain(const BootInfo *Info)
 	}
 	LogOk("core.mm.pmm", "physical memory manager online");
 
+	if (Info->AcpiRsdpAddress != 0) {
+		AcpiInit(Info->AcpiRsdpAddress);
+		MadtInit();
+	}
+
+	IrqInit();
+
 	BootInfoPhysical = (uint64_t)(uintptr_t)Info;
 
 	uint64_t StackBase = PmmAllocPagesPhys(KernelStackPages);
@@ -177,10 +188,20 @@ void KernelMain(const BootInfo *Info)
 	}
 	LogOk("core.mm.heap", "kernel heap online");
 
-	if (Info->AcpiRsdpAddress != 0) {
-		AcpiInit(Info->AcpiRsdpAddress);
+	DriverRegister(&KbdDriver);
+	DeviceRegister(&KbdDevice);
+	DeviceBind(&KbdDevice, &KbdDriver);
+
+	PitInit(100);
+	LogInfo("core.sys.entry", "avOS kernel v1.0 finsihed initializing!");
+
+	Device *kbd = DeviceGet("kbd");
+	if (kbd) {
+		DeviceControl(kbd, KbdCtrlEchoOn, 0);
+		LogInfo("core.sys.entry", "Keyboard ECHO enabled");
 	}
 
+	__asm__ volatile("sti");
 	for (;;) {
 		__asm__ volatile("hlt");
 	}

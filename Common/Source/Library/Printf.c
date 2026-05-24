@@ -79,7 +79,7 @@ static void EmitSigned(PrintState *State, intptr_t Value, int Width, char Fill,
 }
 
 static void EmitString(PrintState *State, const char *String, int Width,
-					   bool LeftAlign)
+					   bool LeftAlign, int Precision)
 {
 	if (String == NULL) {
 		String = "(null)";
@@ -89,6 +89,10 @@ static void EmitString(PrintState *State, const char *String, int Width,
 
 	while (String[Length] != '\0') {
 		++Length;
+	}
+
+	if (Precision >= 0 && Length > Precision) {
+		Length = Precision;
 	}
 
 	if (LeftAlign) {
@@ -163,6 +167,16 @@ int VPrintf(const char *Format, va_list Arguments)
 			++Format;
 		}
 
+		int Precision = -1;
+		if (*Format == '.') {
+			++Format;
+			Precision = 0;
+			while (*Format >= '0' && *Format <= '9') {
+				Precision = (Precision * 10) + (*Format - '0');
+				++Format;
+			}
+		}
+
 		int Length = 0;
 		if (*Format == 'l') {
 			++Format;
@@ -183,7 +197,7 @@ int VPrintf(const char *Format, va_list Arguments)
 			break;
 		case 's':
 			EmitString(&State, va_arg(Arguments, const char *), Width,
-					   LeftAlign);
+					   LeftAlign, Precision);
 			break;
 		case 'd':
 		case 'i':
@@ -257,7 +271,7 @@ int VPrintf(const char *Format, va_list Arguments)
 			}
 			break;
 		case 'p':
-			EmitString(&State, "0x", 0, false);
+			EmitString(&State, "0x", 0, false, -1);
 			EmitUnsigned(&State, (uintptr_t)va_arg(Arguments, void *), 16,
 						 false, (int)(sizeof(uintptr_t) * 2u), '0', false);
 			break;

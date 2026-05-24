@@ -4,64 +4,71 @@
 
 #include <stddef.h>
 
-typedef struct __attribute__((packed)) {
-	char Signature[4];
-	uint32_t Length;
-	uint8_t Revision;
-	uint8_t Checksum;
-	char OemId[6];
-	char OemTableId[8];
-	uint32_t OemRevision;
-	uint32_t CreatorId;
-	uint32_t CreatorRevision;
-} AcpiSdth;
-
-typedef struct __attribute__((packed)) {
-	char Signature[8];
-	uint8_t Checksum;
-	char OemId[6];
-	uint8_t Revision;
-	uint32_t RsdtAddress;
-	uint32_t Length;
-	uint64_t XsdtAddress;
-	uint8_t ExtendedChecksum;
-	uint8_t Reserved[3];
-} AcpiRsdp;
+static const AcpiSdth *AcpiSdt;
+static bool AcpiIsXsdt;
 
 void AcpiInit(uint64_t RsdpPhys)
 {
-	uint64_t hhdm = PmmGetHhdmOffset();
-	const AcpiRsdp *Rsdp = (const AcpiRsdp *)(RsdpPhys + hhdm);
+	const AcpiRsdp *Rsdp = (const AcpiRsdp *)(RsdpPhys + PmmGetHhdmOffset());
 
 	LogInfo("core.acpi", "RSDP revision %u", Rsdp->Revision);
 
 	if (Rsdp->Revision >= 2 && Rsdp->XsdtAddress != 0) {
-		const AcpiSdth *XsdtHdr = (const AcpiSdth *)(Rsdp->XsdtAddress + hhdm);
-		uint32_t count = (XsdtHdr->Length - sizeof(AcpiSdth)) / 8;
-		const uint64_t *entries = (const uint64_t *)(XsdtHdr + 1);
-
-		LogInfo("core.acpi", "XSDT at 0x%llx (%u entries)",
-				(unsigned long long)Rsdp->XsdtAddress, count);
-		for (uint32_t i = 0; i < count; ++i) {
-			const AcpiSdth *Tbl = (const AcpiSdth *)(entries[i] + hhdm);
-			char sig[5] = { Tbl->Signature[0], Tbl->Signature[1],
-							Tbl->Signature[2], Tbl->Signature[3], 0 };
-			LogInfo("core.acpi", "  [%u] %s", i, sig);
+		AcpiSdt = (const AcpiSdth *)(Rsdp->XsdtAddress + PmmGetHhdmOffset());
+		AcpiIsXsdt = true;
+		uint32_t n = (AcpiSdt->Length - sizeof(AcpiSdth)) / 8;
+		const uint64_t *e = (const uint64_t *)(AcpiSdt + 1);
+		LogInfo("core.acpi", "XSDT at 0x%llx  %u tables",
+				(unsigned long long)Rsdp->XsdtAddress, n);
+		for (uint32_t i = 0; i < n; ++i) {
+			const AcpiSdth *t = (const AcpiSdth *)(e[i] + PmmGetHhdmOffset());
+			LogInfo("core.acpi", "  [%02u] %.4s", i, t->Signature);
 		}
 	} else if (Rsdp->RsdtAddress != 0) {
-		const AcpiSdth *RsdtHdr =
-			(const AcpiSdth *)((uint64_t)Rsdp->RsdtAddress + hhdm);
-		uint32_t count = (RsdtHdr->Length - sizeof(AcpiSdth)) / 4;
-		const uint32_t *entries = (const uint32_t *)(RsdtHdr + 1);
+		AcpiSdt = (const AcpiSdth *)((uint64_t)Rsdp->RsdtAddress +
+									 PmmGetHhdmOffset());
+		AcpiIsXsdt = false;
+		uint32_t n = (AcpiSdt->Length - sizeof(AcpiSdth)) / 4;
+		const uint32_t *e = (const uint32_t *)(AcpiSdt + 1);
+		LogInfo("core.acpi", "RSDT at 0x%x  %u tables", Rsdp->RsdtAddress, n);
+		for (uint32_t i = 0; i < n; ++i) {
+			const AcpiSdth *t =
+				(const AcpiSdth *)((uint64_t)e[i] + PmmGetHhdmOffset());
+			LogInfo("core.acpi", "  [%02u] %.4s", i, t->Signature);
+		}
+	} else {
+		LogWarn("core.acpi", "no SDT found");
+		AcpiSdt = 0;
+	}
+}
 
-		LogInfo("core.acpi", "RSDT at 0x%x (%u entries)", Rsdp->RsdtAddress,
-				count);
+const void *AcpiGetTable(const char Sig[4])
+{
+	if (AcpiSdt == 0)
+		return 0;
+
+	uint32_t count;
+	if (AcpiIsXsdt) {
+		count = (AcpiSdt->Length - sizeof(AcpiSdth)) / 8;
+		const uint64_t *ents = (const uint64_t *)(AcpiSdt + 1);
 		for (uint32_t i = 0; i < count; ++i) {
-			const AcpiSdth *Tbl =
-				(const AcpiSdth *)((uint64_t)entries[i] + hhdm);
-			char sig[5] = { Tbl->Signature[0], Tbl->Signature[1],
-							Tbl->Signature[2], Tbl->Signature[3], 0 };
-			LogInfo("core.acpi", "  [%u] %s", i, sig);
+			const AcpiSdth *tbl =
+				(const AcpiSdth *)(ents[i] + PmmGetHhdmOffset());
+			if (tbl->Signature[0] == Sig[0] && tbl->Signature[1] == Sig[1] &&
+				tbl->Signature[2] == Sig[2] && tbl->Signature[3] == Sig[3])
+				return tbl;
+		}
+	} else {
+		count = (AcpiSdt->Length - sizeof(AcpiSdth)) / 4;
+		const uint32_t *ents = (const uint32_t *)(AcpiSdt + 1);
+		for (uint32_t i = 0; i < count; ++i) {
+			const AcpiSdth *tbl =
+				(const AcpiSdth *)((uint64_t)ents[i] + PmmGetHhdmOffset());
+			if (tbl->Signature[0] == Sig[0] && tbl->Signature[1] == Sig[1] &&
+				tbl->Signature[2] == Sig[2] && tbl->Signature[3] == Sig[3])
+				return tbl;
 		}
 	}
+
+	return 0;
 }
