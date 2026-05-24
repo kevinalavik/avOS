@@ -1,12 +1,13 @@
-#include <Boot/BootInfo.h>
-#include <Device/Serial.h>
-#include <Library/Printf.h>
-#include <Library/Stdout.h>
-#include <Core/Log.h>
+#include <Acpi/Acpi.h>
 #include <Arch/Gdt.h>
 #include <Arch/Idt.h>
+#include <Boot/BootInfo.h>
+#include <Core/Log.h>
 #include <Device/Framebuffer.h>
+#include <Device/Serial.h>
 #include <Device/TextConsole.h>
+#include <Library/Printf.h>
+#include <Library/Stdout.h>
 #include <Memory/Heap.h>
 #include <Memory/PageDb.h>
 #include <Memory/Paging.h>
@@ -106,10 +107,8 @@ void KernelMain(const BootInfo *Info)
 			 (unsigned long long)(uintptr_t)Info);
 	InitFramebufferConsole(&Info->Framebuffer);
 	if (Info->AcpiRsdpAddress != 0) {
-		LogDebug("core.acpi", "RSDP=0x%llx RSDT=0x%llx XSDT=0x%llx",
-				 (unsigned long long)Info->AcpiRsdpAddress,
-				 (unsigned long long)Info->AcpiRsdtAddress,
-				 (unsigned long long)Info->AcpiXsdtAddress);
+		LogDebug("core.acpi", "RSDP=0x%llx",
+				 (unsigned long long)Info->AcpiRsdpAddress);
 	} else {
 		LogDebug("core.acpi", "RSDP unavailable");
 	}
@@ -176,6 +175,10 @@ void KernelMain(const BootInfo *Info)
 			__asm__ volatile("hlt");
 	}
 	LogOk("core.mm.heap", "kernel heap online");
+
+	if (Info->AcpiRsdpAddress != 0) {
+		AcpiInit(Info->AcpiRsdpAddress);
+	}
 
 	for (;;) {
 		__asm__ volatile("hlt");

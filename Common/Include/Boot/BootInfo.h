@@ -45,8 +45,6 @@ typedef struct BootInfo {
 	uint64_t KernelEntry;
 	uint64_t HhdmOffset;
 	uint64_t AcpiRsdpAddress;
-	uint64_t AcpiRsdtAddress;
-	uint64_t AcpiXsdtAddress;
 	char KernelPath[BootInfoKernelPathSize];
 	BootMemoryMapEntry MemoryMap[BootMemoryMapMaxEntries];
 	BootFramebuffer Framebuffer;

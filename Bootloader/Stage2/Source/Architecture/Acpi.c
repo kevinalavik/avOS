@@ -103,7 +103,7 @@ static const AcpiRsdp *SearchEbda(void)
 
 AcpiRootPointers AcpiFindRootPointers(void)
 {
-	AcpiRootPointers Roots = { 0, 0, 0, 0 };
+	AcpiRootPointers Roots = { 0 };
 	const AcpiRsdp *Rsdp = SearchEbda();
 
 	if (Rsdp == 0) {
@@ -117,18 +117,9 @@ AcpiRootPointers AcpiFindRootPointers(void)
 	}
 
 	Roots.RsdpAddress = (uint64_t)(uintptr_t)Rsdp;
-	Roots.RsdtAddress = Rsdp->RsdtAddress;
-	Roots.Revision = Rsdp->Revision;
-	if (Rsdp->Revision != 0 && Rsdp->Length >= AcpiRsdpV2MinimumLength) {
-		Roots.XsdtAddress = Rsdp->XsdtAddress;
-	}
 
 	DebugLog("ACPI", "RSDP 0x%08x revision %u",
-		  (unsigned int)Roots.RsdpAddress, (unsigned int)Roots.Revision);
-	DebugLog("ACPI", "RSDT 0x%08x XSDT 0x%08x%08x",
-			(unsigned int)Roots.RsdtAddress,
-			(unsigned int)(Roots.XsdtAddress >> 32),
-			(unsigned int)Roots.XsdtAddress);
+		  (unsigned int)Roots.RsdpAddress, (unsigned int)Rsdp->Revision);
 
 	return Roots;
 }

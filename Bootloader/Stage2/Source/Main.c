@@ -203,8 +203,6 @@ static BootInfo *CreateBootInfo(const MemoryMap *Map, uint64_t KernelEntry,
 	Info->KernelEntry = KernelEntry;
 	Info->HhdmOffset = PagingGetHhdmOffset();
 	Info->AcpiRsdpAddress = AcpiRoots->RsdpAddress;
-	Info->AcpiRsdtAddress = AcpiRoots->RsdtAddress;
-	Info->AcpiXsdtAddress = AcpiRoots->XsdtAddress;
 	CopyString(Info->KernelPath, sizeof(Info->KernelPath), KernelPath);
 	CopyString(Info->Cmdline, sizeof(Info->Cmdline), Cmdline);
 	Info->MemoryMapEntriesCount = CopyMemoryMap(Info, Map);
