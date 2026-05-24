@@ -112,8 +112,18 @@ static void KbdProcessScancode(uint8_t sc)
 
 	if (c) {
 		KbdPutChar(c);
-		if (KbdEcho)
-			StdoutPutc(c);
+		if (KbdEcho) {
+			if (c == '\n') {
+				StdoutPutc('\r');
+				StdoutPutc('\n');
+			} else if (c == '\b') {
+				StdoutPutc('\b');
+				StdoutPutc(' ');
+				StdoutPutc('\b');
+			} else {
+				StdoutPutc(c);
+			}
+		}
 	}
 }
 
