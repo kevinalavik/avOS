@@ -23,7 +23,9 @@ typedef struct KshCommand {
 } KshCommand;
 
 #define KSH_COMMAND(Name, Description, Callback) \
-	{ (Name), (Description), (Callback) }
+	{                                            \
+		(Name), (Description), (Callback)        \
+	}
 
 static void KshCommandGuide(char **ArgPointer, size_t ArgCount);
 static void KshCommandVolumes(char **ArgPointer, size_t ArgCount);
@@ -187,10 +189,9 @@ static void KshAppendPath(char *Destination, size_t DestinationSize,
 
 static bool KshIsVolumePath(const char *Path)
 {
-	return Path != 0 &&
-		   (((Path[0] >= 'a' && Path[0] <= 'z') ||
-			 (Path[0] >= 'A' && Path[0] <= 'Z')) &&
-			Path[1] == ':' && Path[2] == '/');
+	return Path != 0 && (((Path[0] >= 'a' && Path[0] <= 'z') ||
+						  (Path[0] >= 'A' && Path[0] <= 'Z')) &&
+						 Path[1] == ':' && Path[2] == '/');
 }
 
 static char KshNormalizeVolumeId(char VolumeId)
@@ -218,8 +219,9 @@ static bool KshBuildRootPath(char *Destination, size_t DestinationSize,
 
 static char KshCurrentVolumeId(void)
 {
-	return KshIsVolumePath(KshCurrentPath)
-		? KshNormalizeVolumeId(KshCurrentPath[0]) : '\0';
+	return KshIsVolumePath(KshCurrentPath) ?
+			   KshNormalizeVolumeId(KshCurrentPath[0]) :
+			   '\0';
 }
 
 static bool KshBuildParentPath(char *Path)
@@ -325,7 +327,7 @@ static bool KshResolvePath(char *Destination, size_t DestinationSize,
 
 static void KshPrintPrompt(void)
 {
-	Printf("\n%s> ", KshCurrentPath);
+	Printf("%s> ", KshCurrentPath);
 }
 
 static void KshPrintTree(const char *Path, int Depth)
