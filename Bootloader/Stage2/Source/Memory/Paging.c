@@ -11,7 +11,7 @@
 #define PageSize1G 0x40000000ull
 #define PageTableEntries 512u
 #define IdentityPdptEntries 4u
-#define HhdmPdptEntries 4u
+#define HhdmPdptEntries 64u
 #define HigherHalfPdptIndex 510u
 #define HigherHalfPml4Index 511u
 #define HhdmPml4Index 256u

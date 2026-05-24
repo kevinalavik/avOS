@@ -9,7 +9,7 @@
 #define BootInfoCmdlineSize 256u
 #define BootMemoryMapMaxEntries 32u
 #define BootHhdmOffset 0xffff800000000000ull
-#define BootHhdmMappedSize 0x100000000ull
+#define BootHhdmMappedSize 0x1000000000ull
 #define BootFramebufferWidth 1024
 #define BootFramebufferHeight 768
 #define BootFramebufferBpp 32
