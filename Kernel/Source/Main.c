@@ -6,6 +6,7 @@
 #include <Arch/Gdt.h>
 #include <Arch/Idt.h>
 #include <Device/Framebuffer.h>
+#include <Device/TextConsole.h>
 
 #include <flanterm.h>
 #include <flanterm_backends/fb.h>
@@ -38,6 +39,8 @@ static void LogKernelPutc(char Character)
 	SerialPutc(Character);
 	if (FtCtx != NULL) {
 		flanterm_write(FtCtx, &Character, 1);
+	} else if (TextConsoleReady()) {
+		TextConsolePutc(Character);
 	}
 }
 
@@ -55,19 +58,20 @@ void KernelMain(const BootInfo *Info)
 	LogSetLevel(LogLevelTrace);
 
 	SerialInit(SerialCom1, 115200);
-	StdoutPutc = SerialPutc;
-
-	LogDebug("hello from kernel!");
+	TextConsoleInit();
+	StdoutPutc = LogKernelPutc;
 
 	if (!Info || Info->Magic != BootInfoMagic ||
 		Info->Version != BootInfoVersion || Info->Size < sizeof(BootInfo)) {
-		LogFatal("invalid boot info");
+		LogFatal("ENTRY", "invalid boot info");
 		for (;;)
 			__asm__ volatile("hlt");
 	}
 
+	LogDebug("ENTRY", "hello from kernel");
+
 	if (FramebufferInit(&Info->Framebuffer)) {
-		LogInfo("framebuffer: %ux%u pitch=%u bpp=%u addr=0x%llx",
+		LogInfo("FB", "framebuffer: %ux%u pitch=%u bpp=%u addr=0x%llx",
 				(unsigned int)Info->Framebuffer.Width,
 				(unsigned int)Info->Framebuffer.Height,
 				(unsigned int)Info->Framebuffer.Pitch,
@@ -82,12 +86,12 @@ void KernelMain(const BootInfo *Info)
 
 		if (FtCtx != NULL) {
 			StdoutPutc = LogKernelPutc;
-			LogInfo("flanterm terminal initialized");
+			LogInfo("FB", "flanterm terminal initialized");
 		} else {
-			LogWarn("flanterm init returned null");
+			LogWarn("FB", "flanterm init returned null");
 		}
 	} else {
-		LogWarn("framebuffer unavailable");
+		LogWarn("FB", "framebuffer unavailable");
 	}
 
 	uint64_t UsableBytes = 0;
@@ -101,16 +105,17 @@ void KernelMain(const BootInfo *Info)
 		}
 	}
 
-	LogInfo("usable memory: %llu MiB", (unsigned long long)(UsableBytes >> 20));
+	LogInfo("MEM", "usable memory: %llu MiB",
+			(unsigned long long)(UsableBytes >> 20));
 
 	GdtInit();
-	LogOk("GDT initialized");
+	LogOk("ARCH", "GDT initialized");
 
 	GdtTssInit(ReadStackPointer());
-	LogOk("TSS initialized");
+	LogOk("ARCH", "TSS initialized");
 
 	IdtInit();
-	LogOk("IDT initialized");
+	LogOk("ARCH", "IDT initialized");
 
 	*(uint64_t *)0xdeadbeef = 42;
 

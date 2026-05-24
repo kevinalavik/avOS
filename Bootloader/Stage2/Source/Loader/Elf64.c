@@ -198,12 +198,12 @@ bool Elf64Load(const char *Path, uint64_t *EntryAddress)
 			Destination + ProgramHeader->FileSize,
 			(size_t)(ProgramHeader->MemorySize - ProgramHeader->FileSize));
 
-		LogInfo("ELF64", "segment %u virt 0x%08x%08x phys 0x%08x mem %u",
-				(unsigned int)Index,
-				(unsigned int)(ProgramHeader->VirtualAddress >> 32),
-				(unsigned int)ProgramHeader->VirtualAddress,
-				(unsigned int)PhysicalAddress,
-				(unsigned int)ProgramHeader->MemorySize);
+		LogDebug("ELF64", "segment %u virt 0x%08x%08x phys 0x%08x mem %u",
+				 (unsigned int)Index,
+				 (unsigned int)(ProgramHeader->VirtualAddress >> 32),
+				 (unsigned int)ProgramHeader->VirtualAddress,
+				 (unsigned int)PhysicalAddress,
+				 (unsigned int)ProgramHeader->MemorySize);
 	}
 
 	*EntryAddress = Header->Entry;

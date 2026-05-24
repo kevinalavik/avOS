@@ -19,17 +19,54 @@ static bool IsLineBreak(char Character)
 	return Character == '\r' || Character == '\n';
 }
 
+static const char *SkipWhitespace(const char *Config)
+{
+	while (*Config == ' ' || *Config == '\t' || IsLineBreak(*Config)) {
+		++Config;
+	}
+
+	return Config;
+}
+
+static const char *SkipCommentOrUnknownLine(const char *Config)
+{
+	while (*Config != '\0' && !IsLineBreak(*Config)) {
+		++Config;
+	}
+
+	return Config;
+}
+
+static bool IsValueTerminator(char Character)
+{
+	return Character == '\0' || Character == ' ' || Character == '\t' ||
+		   IsLineBreak(Character);
+}
+
+static bool ConfigValueEquals(const char *Value, const char *Expected)
+{
+	while (*Expected != '\0') {
+		char Character = *Value++;
+
+		if (Character >= 'A' && Character <= 'Z') {
+			Character = (char)(Character - 'A' + 'a');
+		}
+
+		if (Character != *Expected++) {
+			return false;
+		}
+	}
+
+	return IsValueTerminator(*Value);
+}
+
 bool ParseKernelPath(const char *Config, char KernelPath[BootPathMax])
 {
 	while (*Config != '\0') {
-		while (*Config == ' ' || *Config == '\t' || IsLineBreak(*Config)) {
-			++Config;
-		}
+		Config = SkipWhitespace(Config);
 
 		if (*Config == '#') {
-			while (*Config != '\0' && !IsLineBreak(*Config)) {
-				++Config;
-			}
+			Config = SkipCommentOrUnknownLine(Config);
 			continue;
 		}
 
@@ -56,12 +93,35 @@ bool ParseKernelPath(const char *Config, char KernelPath[BootPathMax])
 			return PathLength != 0;
 		}
 
-		while (*Config != '\0' && !IsLineBreak(*Config)) {
-			++Config;
-		}
+		Config = SkipCommentOrUnknownLine(Config);
 	}
 
 	return false;
+}
+
+bool ParseFramebufferEnabled(const char *Config)
+{
+	while (*Config != '\0') {
+		Config = SkipWhitespace(Config);
+
+		if (*Config == '#') {
+			Config = SkipCommentOrUnknownLine(Config);
+			continue;
+		}
+
+		if (StringStartsWith(Config, FramebufferConfigKey)) {
+			const char *Value = Config + sizeof(FramebufferConfigKey) - 1u;
+
+			return !(ConfigValueEquals(Value, "no") ||
+					 ConfigValueEquals(Value, "false") ||
+					 ConfigValueEquals(Value, "off") ||
+					 ConfigValueEquals(Value, "0"));
+		}
+
+		Config = SkipCommentOrUnknownLine(Config);
+	}
+
+	return true;
 }
 
 bool ReadTextFile(const char *Path, char **BufferOut)

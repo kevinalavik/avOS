@@ -1,108 +1,53 @@
 #include <Device/Disk.h>
-#include <Device/PortIO.h>
 #include <Library/Log.h>
 
-#define AtaData 0x1F0
-#define AtaSectorCount 0x1F2
-#define AtaLbaLow 0x1F3
-#define AtaLbaMid 0x1F4
-#define AtaLbaHigh 0x1F5
-#define AtaDrive 0x1F6
-#define AtaStatusCommand 0x1F7
-#define AtaAltStatus 0x3F6
+#include <stddef.h>
 
-#define AtaCommandReadSectors 0x20
-#define AtaDriveMasterLba 0xE0
+extern uint8_t Stage2BootDrive;
+uint8_t BiosDiskReadSectors(uint32_t Lba, uint8_t Count, void *Buffer);
 
-#define AtaStatusError 0x01
-#define AtaStatusDataRequest 0x08
-#define AtaStatusDeviceFault 0x20
-#define AtaStatusBusy 0x80
+static uint8_t BiosBounceSector[DiskSectorSize] __attribute__((aligned(16)));
 
-#define AtaTimeout 100000u
-
-static void IoWait(void)
+static void CopyBytes(void *Destination, const void *Source, size_t Size)
 {
-	(void)PortIORead(PortIOWidth8, AtaAltStatus);
-	(void)PortIORead(PortIOWidth8, AtaAltStatus);
-	(void)PortIORead(PortIOWidth8, AtaAltStatus);
-	(void)PortIORead(PortIOWidth8, AtaAltStatus);
-}
+	uint8_t *Out = Destination;
+	const uint8_t *In = Source;
 
-static bool WaitNotBusy(void)
-{
-	for (uint32_t Attempt = 0; Attempt < AtaTimeout; ++Attempt) {
-		if ((PortIORead(PortIOWidth8, AtaStatusCommand) & AtaStatusBusy) == 0) {
-			return true;
-		}
+	for (size_t Index = 0; Index < Size; ++Index) {
+		Out[Index] = In[Index];
 	}
-
-	return false;
-}
-
-static bool WaitDataRequest(void)
-{
-	for (uint32_t Attempt = 0; Attempt < AtaTimeout; ++Attempt) {
-		uint8_t Status = (uint8_t)PortIORead(PortIOWidth8, AtaStatusCommand);
-
-		if ((Status & (AtaStatusError | AtaStatusDeviceFault)) != 0) {
-			LogError("ATA", "ATA status error 0x%x", (unsigned int)Status);
-			return false;
-		}
-
-		if ((Status & AtaStatusDataRequest) != 0) {
-			return true;
-		}
-	}
-
-	LogError("ATA", "timed out waiting for ATA data request");
-	return false;
 }
 
 bool DiskReadSectors(uint32_t Lba, uint8_t Count, void *Buffer)
 {
 	if (Buffer == 0) {
-		LogError("ATA", "read rejected: null buffer");
+		LogError("BIOS", "read rejected: null buffer");
 		return false;
 	}
 
-	if (Count == 0 || Lba > (0x10000000u - Count)) {
-		LogError("ATA", "read rejected: LBA %u count %u", (unsigned int)Lba,
+	if (Count == 0 || Lba > (UINT32_MAX - Count)) {
+		LogError("BIOS", "read rejected: LBA %u count %u", (unsigned int)Lba,
 				 (unsigned int)Count);
 		return false;
 	}
 
-	uint8_t *Out = Buffer;
+	if ((uintptr_t)BiosBounceSector + sizeof(BiosBounceSector) > 0x100000u) {
+		LogError("BIOS", "bounce sector outside real-mode address space");
+		return false;
+	}
 
+	uint8_t *Out = Buffer;
 	for (uint8_t Sector = 0; Sector < Count; ++Sector) {
 		uint32_t CurrentLba = Lba + Sector;
 
-		if (!WaitNotBusy()) {
-			LogError("ATA", "timed out waiting for ATA idle at LBA %u",
+		if (BiosDiskReadSectors(CurrentLba, 1, BiosBounceSector) == 0) {
+			LogError("BIOS", "INT 13h read failed at LBA %u",
 					 (unsigned int)CurrentLba);
 			return false;
 		}
 
-		PortIOWrite(PortIOWidth8, AtaDrive,
-					AtaDriveMasterLba | ((CurrentLba >> 24) & 0x0F));
-		IoWait();
-		PortIOWrite(PortIOWidth8, AtaSectorCount, 1);
-		PortIOWrite(PortIOWidth8, AtaLbaLow, CurrentLba & 0xFF);
-		PortIOWrite(PortIOWidth8, AtaLbaMid, (CurrentLba >> 8) & 0xFF);
-		PortIOWrite(PortIOWidth8, AtaLbaHigh, (CurrentLba >> 16) & 0xFF);
-		PortIOWrite(PortIOWidth8, AtaStatusCommand, AtaCommandReadSectors);
-
-		if (!WaitDataRequest()) {
-			LogError("ATA", "ATA read failed at LBA %u",
-					 (unsigned int)CurrentLba);
-			return false;
-		}
-
-		for (uint16_t Word = 0; Word < DiskSectorSize / 2u; ++Word) {
-			uint16_t Value = (uint16_t)PortIORead(PortIOWidth16, AtaData);
-			*Out++ = (uint8_t)(Value & 0xFF);
-			*Out++ = (uint8_t)(Value >> 8);
-		}
+		CopyBytes(Out, BiosBounceSector, DiskSectorSize);
+		Out += DiskSectorSize;
 	}
 
 	return true;
@@ -110,15 +55,7 @@ bool DiskReadSectors(uint32_t Lba, uint8_t Count, void *Buffer)
 
 bool DiskInit(void)
 {
-	PortIOWrite(PortIOWidth8, AtaDrive, AtaDriveMasterLba);
-	IoWait();
-
-	if (!WaitNotBusy()) {
-		LogError("ATA", "ATA master did not become ready");
-		return false;
-	}
-
-	LogDebug("ATA", "ATA master selected");
+	LogDebug("BIOS", "boot drive 0x%x", (unsigned int)Stage2BootDrive);
 	return true;
 }
 

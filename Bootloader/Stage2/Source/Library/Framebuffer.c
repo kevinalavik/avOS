@@ -23,6 +23,60 @@
 #define PciVendorBochs 0x1234u
 #define PciDeviceBochsVga 0x1111u
 #define PciClassDisplay 0x03u
+#define BochsVbeIndexPort 0x01CEu
+#define BochsVbeDataPort 0x01CFu
+#define BochsVbeIndexId 0u
+#define BochsVbeIndexXres 1u
+#define BochsVbeIndexYres 2u
+#define BochsVbeIndexBpp 3u
+#define BochsVbeIndexEnable 4u
+#define BochsVbeDisabled 0u
+#define BochsVbeEnabled 0x0001u
+#define BochsVbeLinearFramebuffer 0x0040u
+#define BochsVbeMinimumId 0xB0C0u
+#define VesaFramebufferAddressFallback 0xE0000000u
+
+static uint16_t BochsVbeRead(uint16_t Index)
+{
+	PortIOWrite(PortIOWidth16, BochsVbeIndexPort, Index);
+	return (uint16_t)PortIORead(PortIOWidth16, BochsVbeDataPort);
+}
+
+static void BochsVbeWrite(uint16_t Index, uint16_t Value)
+{
+	PortIOWrite(PortIOWidth16, BochsVbeIndexPort, Index);
+	PortIOWrite(PortIOWidth16, BochsVbeDataPort, Value);
+}
+
+static bool EnableBochsVbeFramebuffer(void)
+{
+	VesaModeNumber = 0;
+	VesaFramebufferAddress = 0;
+	VesaWidth = 0;
+	VesaHeight = 0;
+	VesaPitch = 0;
+	VesaBpp = 0;
+
+	if (BochsVbeRead(BochsVbeIndexId) < BochsVbeMinimumId) {
+		return false;
+	}
+
+	BochsVbeWrite(BochsVbeIndexEnable, BochsVbeDisabled);
+	BochsVbeWrite(BochsVbeIndexXres, BootFramebufferWidth);
+	BochsVbeWrite(BochsVbeIndexYres, BootFramebufferHeight);
+	BochsVbeWrite(BochsVbeIndexBpp, BootFramebufferBpp);
+	BochsVbeWrite(BochsVbeIndexEnable,
+				   BochsVbeEnabled | BochsVbeLinearFramebuffer);
+
+	VesaModeNumber = 1;
+	VesaFramebufferAddress = VesaFramebufferAddressFallback;
+	VesaWidth = BootFramebufferWidth;
+	VesaHeight = BootFramebufferHeight;
+	VesaPitch = BootFramebufferPitch;
+	VesaBpp = BootFramebufferBpp;
+
+	return true;
+}
 
 static uint32_t PciConfigAddress(uint8_t Bus, uint8_t Device, uint8_t Function,
 								 uint8_t Offset)
@@ -143,8 +197,13 @@ static uint32_t DetectFramebufferAddress(void)
 
 void FramebufferInit(BootInfo *Info)
 {
+	if (!EnableBochsVbeFramebuffer()) {
+		LogWarn("FB", "no Bochs VBE framebuffer; display unavailable");
+		return;
+	}
+
 	if (VesaModeNumber == 0 || VesaFramebufferAddress == 0) {
-		LogWarn("FB", "no Bochs VBE framebuffer — display unavailable");
+		LogWarn("FB", "no Bochs VBE framebuffer; display unavailable");
 		return;
 	}
 

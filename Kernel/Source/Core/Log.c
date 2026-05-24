@@ -5,19 +5,47 @@
 
 static LogLevel MinLevel = LogLevelInfo;
 
-static const char *const LevelLabels[] = {
-	"TRCE", "DBUG", "INFO", " OK ", "WARN", "ERR!", "FALT",
+typedef struct LogStyle {
+	const char *Label;
+	const char *Color;
+} LogStyle;
+
+static const LogStyle LogStyles[] = {
+	[LogLevelTrace] = { "TRACE", "\033[90m" },
+	[LogLevelDebug] = { "DEBUG", "\033[90m" },
+	[LogLevelInfo] = { "INFO", "\033[96m" },
+	[LogLevelOk] = { " OK ", "\033[92m" },
+	[LogLevelWarn] = { "WARN", "\033[93m" },
+	[LogLevelError] = { "ERROR", "\033[91m" },
+	[LogLevelFatal] = { "FATAL", "\033[1;91m" },
 };
 
-static const char *const LevelColors[] = {
-	"\033[90m",      // Trace
-	"\033[36m",      // Debug
-	"\033[94m",      // Info
-	"\033[92m",      // Ok
-	"\033[93m",      // Warn
-	"\033[91m",      // Error
-	"\033[1;91m",    // Fatal
-};
+static LogLevel NormalizeLevel(LogLevel Level)
+{
+	if (Level < LogLevelTrace || Level > LogLevelFatal)
+		return LogLevelInfo;
+
+	return Level;
+}
+
+static void LogVWrite(LogLevel Level, const char *Component, const char *Format,
+					  va_list Arguments)
+{
+	Level = NormalizeLevel(Level);
+	const LogStyle *Style = &LogStyles[Level];
+
+	if (Level < MinLevel)
+		return;
+
+	Printf("%s[%s]\033[0m", Style->Color, Style->Label);
+	if (Component != 0 && Component[0] != '\0') {
+		Printf(" \033[97m%s:\033[0m", Component);
+	}
+
+	Printf(" ");
+	VPrintf(Format, Arguments);
+	Printf("\n");
+}
 
 void LogInit(void)
 {
@@ -26,22 +54,14 @@ void LogInit(void)
 
 void LogSetLevel(LogLevel Level)
 {
-	MinLevel = Level;
+	MinLevel = NormalizeLevel(Level);
 }
 
-void Log(LogLevel Level, const char *Format, ...)
+void LogWrite(LogLevel Level, const char *Component, const char *Format, ...)
 {
-	if (Level < MinLevel)
-		return;
+	va_list Arguments;
 
-	Printf("%s[%s]\033[0m ", LevelColors[Level], LevelLabels[Level]);
-
-	{
-		va_list Arguments;
-		va_start(Arguments, Format);
-		VPrintf(Format, Arguments);
-		va_end(Arguments);
-	}
-
-	PrintLine("");
+	va_start(Arguments, Format);
+	LogVWrite(Level, Component, Format, Arguments);
+	va_end(Arguments);
 }

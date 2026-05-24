@@ -141,21 +141,6 @@ static bool MakeShortNameN(const char *Name, size_t NameLength,
 	return true;
 }
 
-static bool MakeShortName(const char *Name, char ShortName[11])
-{
-	size_t NameLength = 0;
-
-	if (Name == 0) {
-		return false;
-	}
-
-	while (Name[NameLength] != '\0') {
-		++NameLength;
-	}
-
-	return MakeShortNameN(Name, NameLength, ShortName);
-}
-
 static bool ShortNamesEqual(const uint8_t *EntryName, const char ShortName[11])
 {
 	for (uint8_t Index = 0; Index < 11; ++Index) {
@@ -292,11 +277,12 @@ static void ReadLongNameEntry(const uint8_t *Entry,
 	*HaveLongNameOut = true;
 }
 
-static bool
-ForEachDirectoryEntry(const Fat32Volume *Volume, uint32_t DirectoryCluster,
-					  Fat32ListCallback Callback, void *Context,
-					  const char ShortName[11], const char *SearchLongName,
-					  size_t SearchLongNameLength, Fat32DirectoryEntry *Found)
+static bool FindDirectoryEntry(const Fat32Volume *Volume,
+							   uint32_t DirectoryCluster,
+							   const char ShortName[11],
+							   const char *SearchLongName,
+							   size_t SearchLongNameLength,
+							   Fat32DirectoryEntry *Found)
 {
 	uint32_t Cluster = DirectoryCluster;
 	char LongNameBuffer[Fat32LongNameMax];
@@ -344,10 +330,6 @@ ForEachDirectoryEntry(const Fat32Volume *Volume, uint32_t DirectoryCluster,
 					return true;
 				}
 
-				if (Callback != 0) {
-					Callback(&Entry, Context);
-				}
-
 				ClearLongName(LongNameBuffer, &HaveLongName);
 			}
 		}
@@ -375,9 +357,9 @@ static bool FindInDirectory(const Fat32Volume *Volume,
 
 	Entry->Name[0] = '\0';
 
-	if (!ForEachDirectoryEntry(Volume, DirectoryCluster, 0, 0,
-							   HaveShortName ? ShortName : 0, Name, NameLength,
-							   Entry)) {
+	if (!FindDirectoryEntry(Volume, DirectoryCluster,
+							HaveShortName ? ShortName : 0, Name, NameLength,
+							Entry)) {
 		return false;
 	}
 
@@ -493,44 +475,6 @@ bool Fat32Mount(Fat32Volume *Volume, const BlockDevice *Device)
 			(unsigned int)Volume->FatCount, (unsigned int)Volume->SectorsPerFat,
 			(unsigned int)Volume->DataLba);
 	return true;
-}
-
-bool Fat32ListRoot(const Fat32Volume *Volume, Fat32ListCallback Callback,
-				   void *Context)
-{
-	if (Volume == 0) {
-		LogError("FAT32", "root listing rejected: null volume");
-		return false;
-	}
-
-	return ForEachDirectoryEntry(Volume, Volume->RootCluster, Callback, Context,
-								 0, 0, 0, 0);
-}
-
-bool Fat32FindRoot(const Fat32Volume *Volume, const char *Name,
-				   Fat32DirectoryEntry *Entry)
-{
-	char ShortName[11];
-
-	if (Volume == 0 || Entry == 0) {
-		LogError("FAT32", "find rejected: null argument");
-		return false;
-	}
-
-	if (!MakeShortName(Name, ShortName)) {
-		LogWarn("FAT32", "unsupported short name '%s'",
-				Name != 0 ? Name : "(null)");
-		return false;
-	}
-
-	Entry->Name[0] = '\0';
-
-	if (!ForEachDirectoryEntry(Volume, Volume->RootCluster, 0, 0, ShortName,
-							   Name, 0, Entry)) {
-		return false;
-	}
-
-	return Entry->Name[0] != '\0';
 }
 
 size_t Fat32ReadFile(const Fat32Volume *Volume,

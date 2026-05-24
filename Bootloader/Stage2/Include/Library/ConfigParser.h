@@ -4,11 +4,13 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-#define BootConfigPath "boot:/avboot.conf"
+#define BootConfigPath "/avboot.conf"
 #define KernelConfigKey "kernel="
+#define FramebufferConfigKey "framebuffer="
 #define BootPathMax 128u
 
 bool ParseKernelPath(const char *Config, char KernelPath[BootPathMax]);
+bool ParseFramebufferEnabled(const char *Config);
 bool ReadTextFile(const char *Path, char **BufferOut);
 
 #endif

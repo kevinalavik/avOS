@@ -1,13 +1,9 @@
 bits 16
 
 global Stage2Entry
+global GdtDescriptor
 global BootMemoryMapTable
-global VesaModeNumber
-global VesaFramebufferAddress
-global VesaWidth
-global VesaHeight
-global VesaPitch
-global VesaBpp
+extern Stage2BootDrive
 extern S2Entry
 extern __bss_start
 extern __bss_end
@@ -22,10 +18,10 @@ section .text.entry
 Stage2Entry:
     cli
     SetupRealModeSegments 0x7c00
+    mov [Stage2BootDrive], dl
 
     call SetTextMode80x25
     call EnableA20
-    call SetVesaModeBochs
     call CollectMemoryMap
 
     EnterProtectedMode ProtectedModeEntry
@@ -43,104 +39,6 @@ bits 16
 SetTextMode80x25:
     mov ax, 0x0003
     int 0x10
-    ret
-
-SetVesaModeBochs:
-    push ax
-    push bx
-    push dx
-
-    ; Zero out all VESA output variables (dd = 32 bits, written as two words)
-    xor ax, ax
-    mov word [VesaModeNumber],         ax
-    mov word [VesaModeNumber + 2],     ax
-    mov word [VesaFramebufferAddress], ax
-    mov word [VesaFramebufferAddress + 2], ax
-    mov word [VesaWidth],              ax
-    mov word [VesaWidth + 2],          ax
-    mov word [VesaHeight],             ax
-    mov word [VesaHeight + 2],         ax
-    mov word [VesaPitch],              ax
-    mov word [VesaPitch + 2],          ax
-    mov word [VesaBpp],                ax
-    mov word [VesaBpp + 2],            ax
-
-    ; --- Detect Bochs VBE ---
-    ; Read VBE_DISPI_INDEX_ID (index 0); value must be >= 0xB0C0.
-    mov dx, 0x01CE
-    xor ax, ax             ; index 0
-    out dx, ax
-    mov dx, 0x01CF
-    in  ax, dx
-    cmp ax, 0xB0C0
-    jb  .done              ; not Bochs VBE — leave variables at zero
-
-    ; --- Disable VBE before changing resolution / BPP ---
-    mov dx, 0x01CE
-    mov ax, 0x0004         ; VBE_DISPI_INDEX_ENABLE
-    out dx, ax
-    mov dx, 0x01CF
-    xor ax, ax             ; VBE_DISPI_DISABLED
-    out dx, ax
-
-    ; --- XRES = 1024 ---
-    mov dx, 0x01CE
-    mov ax, 0x0001         ; VBE_DISPI_INDEX_XRES
-    out dx, ax
-    mov dx, 0x01CF
-    mov ax, 1024
-    out dx, ax
-
-    ; --- YRES = 768 ---
-    mov dx, 0x01CE
-    mov ax, 0x0002         ; VBE_DISPI_INDEX_YRES
-    out dx, ax
-    mov dx, 0x01CF
-    mov ax, 768
-    out dx, ax
-
-    ; --- BPP = 32 ---
-    mov dx, 0x01CE
-    mov ax, 0x0003         ; VBE_DISPI_INDEX_BPP
-    out dx, ax
-    mov dx, 0x01CF
-    mov ax, 32
-    out dx, ax
-
-    ; --- Enable with linear framebuffer ---
-    mov dx, 0x01CE
-    mov ax, 0x0004         ; VBE_DISPI_INDEX_ENABLE
-    out dx, ax
-    mov dx, 0x01CF
-    mov ax, 0x0041         ; VBE_DISPI_ENABLED | VBE_DISPI_LFB_ENABLE
-    out dx, ax
-
-    ; --- Store results ---
-    mov word [VesaModeNumber], 1
-    mov word [VesaModeNumber + 2], 0
-
-    mov word [VesaWidth], 1024
-    mov word [VesaWidth + 2], 0
-
-    mov word [VesaHeight], 768
-    mov word [VesaHeight + 2], 0
-
-    mov word [VesaBpp], 32
-    mov word [VesaBpp + 2], 0
-
-    ; Pitch = width * (bpp / 8) = 1024 * 4 = 4096 = 0x1000
-    mov word [VesaPitch], 0x1000
-    mov word [VesaPitch + 2], 0
-
-    ; Bootstrap fallback. Stage2 later queries the Bochs/QEMU PCI BAR
-    ; and replaces this with the real framebuffer aperture when available.
-    mov word [VesaFramebufferAddress],     0x0000
-    mov word [VesaFramebufferAddress + 2], 0xE000
-
-.done:
-    pop dx
-    pop bx
-    pop ax
     ret
 
 EnableA20:
@@ -210,14 +108,6 @@ ClearBss:
     ret
 
 EmitFlatGdt
-
-align 4
-VesaModeNumber:         dd 0
-VesaFramebufferAddress: dd 0
-VesaWidth:              dd 0
-VesaHeight:             dd 0
-VesaPitch:              dd 0
-VesaBpp:                dd 0
 
 section .data
 

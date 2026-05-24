@@ -18,6 +18,7 @@ Entry:
     call LoadStage2
 
 EnterStage2:
+    mov dl, [BootDrive]
     jmp Stage2LoadSegment:Stage2LoadOffset
 
 LoadStage2:

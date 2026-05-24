@@ -5,7 +5,6 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define VfsMaxNamespaceLength 15u
 #define VfsNodeStorageSize 32u
 
 typedef struct VfsNode {
@@ -29,8 +28,6 @@ typedef struct File {
 	bool Open;
 } File;
 
-bool VfsMount(const char *Namespace, const VfsFilesystemOps *Ops,
-			  void *Filesystem);
 bool VfsMountRoot(const VfsFilesystemOps *Ops, void *Filesystem);
 const char *VfsRootPath(void);
 const char *VfsBootPath(void);

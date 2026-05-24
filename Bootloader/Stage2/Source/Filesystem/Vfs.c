@@ -1,212 +1,25 @@
 #include <Filesystem/Vfs.h>
 
 #include <Library/Log.h>
-#include <Memory/Allocator.h>
 
-#define VfsMaxMounts 4u
-#define VfsBootNamespace "boot"
-#define VfsRootPrefix "boot:/"
+#define VfsRootPrefix "/"
 
-typedef struct VfsMountPoint {
-	char Namespace[VfsMaxNamespaceLength + 1u];
-	const VfsFilesystemOps *Ops;
-	void *Filesystem;
-	bool Mounted;
-} VfsMountPoint;
-
-typedef struct VfsResolvedPath {
-	VfsMountPoint *Mount;
-	const char *LocalPath;
-} VfsResolvedPath;
-
-static VfsMountPoint *Mounts;
-static size_t MountCount;
-
-static bool EnsureMountTable(void)
-{
-	if (Mounts != 0) {
-		return true;
-	}
-
-	Mounts = Calloc(VfsMaxMounts, sizeof(VfsMountPoint));
-	if (Mounts == 0) {
-		MountCount = 0;
-		LogError("VFS", "failed to allocate mount table");
-		return false;
-	}
-
-	MountCount = VfsMaxMounts;
-	return true;
-}
-
-static bool StringEqual(const char *Left, const char *Right)
-{
-	if (Left == 0 || Right == 0) {
-		return false;
-	}
-
-	while (*Left != '\0' && *Right != '\0') {
-		if (*Left++ != *Right++) {
-			return false;
-		}
-	}
-
-	return *Left == '\0' && *Right == '\0';
-}
-
-static bool NamespaceEqual(const char *Path, const char *Namespace,
-						   size_t NamespaceLength)
-{
-	size_t Index = 0;
-
-	while (Index < NamespaceLength) {
-		if (Namespace[Index] == '\0' || Path[Index] != Namespace[Index]) {
-			return false;
-		}
-
-		++Index;
-	}
-
-	return Namespace[Index] == '\0';
-}
-
-static bool IsNamespaceChar(char Character)
-{
-	return (Character >= 'a' && Character <= 'z') ||
-		   (Character >= 'A' && Character <= 'Z') ||
-		   (Character >= '0' && Character <= '9') || Character == '_' ||
-		   Character == '-';
-}
-
-static bool CopyNamespace(char Out[VfsMaxNamespaceLength + 1u],
-						  const char *Namespace)
-{
-	size_t Index = 0;
-
-	if (Namespace == 0 || Namespace[0] == '\0') {
-		return false;
-	}
-
-	while (Namespace[Index] != '\0') {
-		if (Index >= VfsMaxNamespaceLength ||
-			!IsNamespaceChar(Namespace[Index])) {
-			return false;
-		}
-
-		Out[Index] = Namespace[Index];
-		++Index;
-	}
-
-	Out[Index] = '\0';
-	return true;
-}
-
-static bool ParsePath(const char *Path, const char **NamespaceEndOut,
-					  const char **LocalPathOut)
-{
-	const char *Cursor = Path;
-
-	if (Path == 0 || !IsNamespaceChar(*Cursor)) {
-		return false;
-	}
-
-	while (IsNamespaceChar(*Cursor)) {
-		++Cursor;
-	}
-
-	if (Cursor[0] != ':' || Cursor[1] != '/') {
-		return false;
-	}
-
-	*NamespaceEndOut = Cursor;
-	*LocalPathOut = Cursor + 2;
-	return true;
-}
-
-static bool ResolvePath(const char *Path, VfsResolvedPath *Resolved)
-{
-	const char *NamespaceEnd;
-	const char *LocalPath;
-
-	if (!EnsureMountTable()) {
-		return false;
-	}
-
-	if (!ParsePath(Path, &NamespaceEnd, &LocalPath)) {
-		LogWarn("VFS", "unsupported path '%s'", Path != 0 ? Path : "");
-		return false;
-	}
-
-	size_t NamespaceLength = (size_t)(NamespaceEnd - Path);
-
-	for (size_t Index = 0; Index < MountCount; ++Index) {
-		if (!Mounts[Index].Mounted) {
-			continue;
-		}
-
-		if (NamespaceEqual(Path, Mounts[Index].Namespace, NamespaceLength)) {
-			Resolved->Mount = &Mounts[Index];
-			Resolved->LocalPath = LocalPath;
-			return true;
-		}
-	}
-
-	LogWarn("VFS", "namespace not mounted in '%s'", Path);
-	return false;
-}
-
-bool VfsMount(const char *Namespace, const VfsFilesystemOps *Ops,
-			  void *Filesystem)
-{
-	char SanitizedNamespace[VfsMaxNamespaceLength + 1u];
-	VfsMountPoint *FreeMount = 0;
-
-	if (!EnsureMountTable()) {
-		return false;
-	}
-
-	if (!CopyNamespace(SanitizedNamespace, Namespace) || Ops == 0 ||
-		Ops->Open == 0 || Ops->Read == 0 || Filesystem == 0) {
-		LogError("VFS", "mount rejected: invalid argument");
-		return false;
-	}
-
-	for (size_t Index = 0; Index < MountCount; ++Index) {
-		if (Mounts[Index].Mounted &&
-			StringEqual(Mounts[Index].Namespace, SanitizedNamespace)) {
-			Mounts[Index].Ops = Ops;
-			Mounts[Index].Filesystem = Filesystem;
-			LogDebug("VFS", "remounted %s:/", SanitizedNamespace);
-			return true;
-		}
-
-		if (!Mounts[Index].Mounted && FreeMount == 0) {
-			FreeMount = &Mounts[Index];
-		}
-	}
-
-	if (FreeMount == 0) {
-		LogError("VFS", "mount table full");
-		return false;
-	}
-
-	for (size_t Index = 0; Index <= VfsMaxNamespaceLength; ++Index) {
-		FreeMount->Namespace[Index] = SanitizedNamespace[Index];
-		if (SanitizedNamespace[Index] == '\0') {
-			break;
-		}
-	}
-
-	FreeMount->Ops = Ops;
-	FreeMount->Filesystem = Filesystem;
-	FreeMount->Mounted = true;
-	LogDebug("VFS", "mounted %s:/", SanitizedNamespace);
-	return true;
-}
+static const VfsFilesystemOps *RootOps;
+static void *RootFilesystem;
+static bool RootMounted;
 
 bool VfsMountRoot(const VfsFilesystemOps *Ops, void *Filesystem)
 {
-	return VfsMount(VfsBootNamespace, Ops, Filesystem);
+	if (Ops == 0 || Ops->Open == 0 || Ops->Read == 0 || Filesystem == 0) {
+		LogError("VFS", "root mount rejected: invalid argument");
+		return false;
+	}
+
+	RootOps = Ops;
+	RootFilesystem = Filesystem;
+	RootMounted = true;
+	LogDebug("VFS", "mounted root /");
+	return true;
 }
 
 const char *VfsRootPath(void)
@@ -221,8 +34,6 @@ const char *VfsBootPath(void)
 
 bool FileOpen(const char *Path, File *Handle)
 {
-	VfsResolvedPath Resolved;
-
 	if (Handle == 0) {
 		LogError("VFS", "open rejected: null file handle");
 		return false;
@@ -230,12 +41,17 @@ bool FileOpen(const char *Path, File *Handle)
 
 	FileClose(Handle);
 
-	if (!ResolvePath(Path, &Resolved)) {
+	if (!RootMounted) {
+		LogError("VFS", "open rejected: no root filesystem");
 		return false;
 	}
 
-	if (!Resolved.Mount->Ops->Open(Resolved.Mount->Filesystem,
-								   Resolved.LocalPath, &Handle->Node)) {
+	if (Path == 0 || Path[0] != '/') {
+		LogWarn("VFS", "unsupported path '%s'", Path != 0 ? Path : "");
+		return false;
+	}
+
+	if (!RootOps->Open(RootFilesystem, Path, &Handle->Node)) {
 		LogWarn("VFS", "file not found '%s'", Path);
 		return false;
 	}
@@ -245,8 +61,8 @@ bool FileOpen(const char *Path, File *Handle)
 		return false;
 	}
 
-	Handle->Ops = Resolved.Mount->Ops;
-	Handle->Filesystem = Resolved.Mount->Filesystem;
+	Handle->Ops = RootOps;
+	Handle->Filesystem = RootFilesystem;
 	Handle->Position = 0;
 	Handle->Open = true;
 	LogDebug("VFS", "opened '%s' (%u bytes)", Path,

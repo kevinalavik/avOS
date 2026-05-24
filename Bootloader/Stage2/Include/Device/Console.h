@@ -4,8 +4,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define VgaDefaultForeground ConsoleColorYellow
-#define VgaDefaultBackground ConsoleColorBlue
+#define VgaDefaultForeground ConsoleColorLightGray
+#define VgaDefaultBackground ConsoleColorBlack
 
 typedef struct ConsoleDevice {
 	void (*Putc)(char Character);

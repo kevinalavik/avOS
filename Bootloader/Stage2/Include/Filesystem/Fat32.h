@@ -30,14 +30,7 @@ typedef struct Fat32DirectoryEntry {
 	uint32_t Size;
 } Fat32DirectoryEntry;
 
-typedef void (*Fat32ListCallback)(const Fat32DirectoryEntry *Entry,
-								  void *Context);
-
 bool Fat32Mount(Fat32Volume *Volume, const BlockDevice *Device);
-bool Fat32ListRoot(const Fat32Volume *Volume, Fat32ListCallback Callback,
-				   void *Context);
-bool Fat32FindRoot(const Fat32Volume *Volume, const char *Name,
-				   Fat32DirectoryEntry *Entry);
 size_t Fat32ReadFile(const Fat32Volume *Volume,
 					 const Fat32DirectoryEntry *Entry, void *Buffer,
 					 size_t Length);
