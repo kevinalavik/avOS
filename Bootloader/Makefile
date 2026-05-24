@@ -35,6 +35,8 @@ STAGE2_LINKER := Linker.ld
 STAGE2_ELF := $(BUILD_DIR)/stage2.elf
 STAGE2_RAW := $(BUILD_DIR)/stage2.raw
 STAGE2_BIN := $(BUILD_DIR)/stage2.bin
+STAGE2_SECTORS = $(shell if [ -f $(STAGE2_RAW) ]; then echo $$(( ($$(wc -c < $(STAGE2_RAW)) + 511) / 512 )); else echo 64; fi)
+
 
 STAGE2_C_SRCS := $(sort $(shell find $(STAGE2_SOURCE_DIR) -type f -name '*.c'))
 STAGE2_ASM_SRCS := $(sort $(shell find $(STAGE2_SOURCE_DIR) -type f -name '*.asm'))
@@ -47,6 +49,7 @@ DEPS := $(BOOTSTRAP_DEP) $(STAGE2_OBJS:.o=.d)
 
 CFLAGS ?= -m32 -I$(COMMON_INCLUDE_DIR) -I$(STAGE2_INCLUDE_DIR) -ffreestanding -fno-pic -fno-pie -fno-stack-protector -fno-asynchronous-unwind-tables -nostdlib -Wall -Wextra
 CFLAGS += -DBOOTLOADER_DEBUG=$(BOOTLOADER_DEBUG)
+NASMFLAGS := -I./ -IStage2/Include/
 
 .PHONY: all clean
 
@@ -55,15 +58,16 @@ all: $(BOOTSTRAP_BIN) $(STAGE2_BIN)
 $(BUILD_DIR):
 	mkdir -p $@
 
-$(BOOTSTRAP_BIN): $(BOOTSTRAP_SRC) Makefile | $(BUILD_DIR)
-	$(NASM) -f bin -M -MP -MT "$@ $(BOOTSTRAP_DEP)" -MF $(BOOTSTRAP_DEP) $<
-	$(NASM) -f bin $< -o $@
+
+$(BOOTSTRAP_BIN): $(BOOTSTRAP_SRC) $(STAGE2_RAW) Makefile | $(BUILD_DIR)
+	$(NASM) $(NASMFLAGS) -f bin -M -MP -MT "$@ $(BOOTSTRAP_DEP)" -MF $(BOOTSTRAP_DEP) $<
+	$(NASM) $(NASMFLAGS) -f bin -DSTAGE2_SECTORS=$(STAGE2_SECTORS) $< -o $@
 	@test "$$(wc -c < $@)" -eq 512 || { echo "$@ must be exactly 512 bytes"; exit 1; }
 
 $(BUILD_DIR)/Stage2/%.asm.o: $(STAGE2_SOURCE_DIR)/%.asm Makefile | $(BUILD_DIR)
 	mkdir -p $(dir $@)
-	$(NASM) -f elf32 -M -MP -MT "$@ $(@:.o=.d)" -MF $(@:.o=.d) $<
-	$(NASM) -f elf32 $< -o $@
+	$(NASM) $(NASMFLAGS) -f elf32 -M -MP -MT "$@ $(@:.o=.d)" -MF $(@:.o=.d) $<
+	$(NASM) $(NASMFLAGS) -f elf32 $< -o $@
 
 $(BUILD_DIR)/Stage2/%.c.o: $(STAGE2_SOURCE_DIR)/%.c Makefile | $(BUILD_DIR)
 	mkdir -p $(dir $@)

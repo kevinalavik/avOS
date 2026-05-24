@@ -1,7 +1,7 @@
 #ifndef DEVICE_KEYBOARD_H
 #define DEVICE_KEYBOARD_H
 
-#include <Device/Device.h>
+#include <Drivers/Device.h>
 
 #define KbdCtrlEchoOn  1
 #define KbdCtrlEchoOff 2

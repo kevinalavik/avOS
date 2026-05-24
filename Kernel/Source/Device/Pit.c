@@ -8,6 +8,41 @@
 #define PitBaseFrequency 1193182
 
 static volatile uint64_t PitTicks;
+static uint32_t PitFrequencyHz;
+static uint16_t PitDivisor;
+static int PitInitialized;
+
+static uint16_t PitReadCounter0(void)
+{
+	/* Latch channel 0 count value. */
+	PortIOWrite8(PitCommand, 0x00);
+	uint8_t lo = PortIORead8(PitChannel0);
+	uint8_t hi = PortIORead8(PitChannel0);
+	return (uint16_t)lo | ((uint16_t)hi << 8);
+}
+
+static void PitWaitBaseCycles(uint64_t Cycles)
+{
+	/*
+	 * PIT counter counts down from divisor to 0, then reloads.
+	 * We accumulate elapsed cycles across wrap by comparing successive reads.
+	 */
+	uint16_t prev = PitReadCounter0();
+	uint64_t elapsed = 0;
+
+	while (elapsed < Cycles) {
+		uint16_t now = PitReadCounter0();
+		uint16_t delta;
+		if (now <= prev) {
+			delta = (uint16_t)(prev - now);
+		} else {
+			/* Wrapped: prev -> 0 then reload -> now. */
+			delta = (uint16_t)(prev + (uint16_t)(PitDivisor - now));
+		}
+		elapsed += delta;
+		prev = now;
+	}
+}
 
 static void PitHandler(Frame *Frame)
 {
@@ -18,9 +53,22 @@ static void PitHandler(Frame *Frame)
 
 void PitInit(uint32_t Frequency)
 {
-	uint32_t divisor = PitBaseFrequency / Frequency;
+	if (Frequency == 0) {
+		Frequency = 100;
+	}
+	uint32_t divisor32 = PitBaseFrequency / Frequency;
+	if (divisor32 == 0) {
+		divisor32 = 1;
+	}
+	if (divisor32 > 0xFFFFu) {
+		divisor32 = 0xFFFFu;
+	}
+	uint16_t divisor = (uint16_t)divisor32;
 
 	PitTicks = 0;
+	PitFrequencyHz = Frequency;
+	PitDivisor = divisor;
+	PitInitialized = 1;
 	IrqRegisterHandler(IrqPit, PitHandler);
 
 	PortIOWrite8(PitCommand, 0x36);
@@ -33,4 +81,31 @@ void PitInit(uint32_t Frequency)
 uint64_t PitGetTicks(void)
 {
 	return PitTicks;
+}
+
+void PitDelayUs(uint64_t Microseconds)
+{
+	if (!PitInitialized || Microseconds == 0) {
+		return;
+	}
+	uint64_t cycles = (PitBaseFrequency * Microseconds) / 1000000ull;
+	if (cycles == 0) {
+		cycles = 1;
+	}
+	PitWaitBaseCycles(cycles);
+}
+
+void PitDelayMs(uint64_t Milliseconds)
+{
+	PitDelayUs(Milliseconds * 1000ull);
+}
+
+uint32_t PitGetFrequencyHz(void)
+{
+	return PitFrequencyHz;
+}
+
+int PitIsInitialized(void)
+{
+	return PitInitialized;
 }

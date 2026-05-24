@@ -1,5 +1,5 @@
-#include <Device/Keyboard.h>
-#include <Device/Device.h>
+#include <Drivers/Input/Keyboard.h>
+#include <Drivers/Device.h>
 #include <Arch/Irq.h>
 #include <Core/Log.h>
 #include <Device/PortIO.h>

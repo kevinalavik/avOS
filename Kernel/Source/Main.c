@@ -4,12 +4,17 @@
 #include <Arch/Idt.h>
 #include <Arch/Irq.h>
 #include <Boot/BootInfo.h>
+#include <Core/Ksh.h>
 #include <Core/Log.h>
 #include <Device/Framebuffer.h>
-#include <Device/Keyboard.h>
 #include <Device/Pit.h>
 #include <Device/Serial.h>
 #include <Device/TextConsole.h>
+#include <Drivers/Device.h>
+#include <Drivers/Input/Keyboard.h>
+#include <Drivers/Storage/Disk.h>
+#include <Filesystem/Fat32.h>
+#include <Filesystem/Vfs.h>
 #include <Library/Printf.h>
 #include <Library/Stdout.h>
 #include <Memory/Heap.h>
@@ -21,7 +26,6 @@
 #include <flanterm.h>
 #include <flanterm_backends/fb.h>
 
-#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -54,6 +58,19 @@ static void LogKernelPutc(char Character)
 	} else if (TextConsoleReady()) {
 		TextConsolePutc(Character);
 	}
+}
+
+static void HaltForever(void)
+{
+	for (;;) {
+		__asm__ volatile("hlt");
+	}
+}
+
+static void FatalBoot(const char *Component, const char *Message)
+{
+	LogFatal(Component, "%s", Message);
+	HaltForever();
 }
 
 static uint64_t ReadStackPointer(void)
@@ -92,6 +109,109 @@ static void InitFramebufferConsole(const BootFramebuffer *Framebuffer)
 	}
 }
 
+static bool BuildVolumeRoot(char *Destination, size_t DestinationSize,
+							char VolumeId)
+{
+	if (DestinationSize < 4) {
+		return false;
+	}
+
+	Destination[0] = VolumeId;
+	Destination[1] = ':';
+	Destination[2] = '/';
+	Destination[3] = '\0';
+	return true;
+}
+
+static const BootInfo *MapBootInfo(const BootInfo *Info)
+{
+	uint64_t InfoAddress = BootInfoPhysical;
+
+	if (InfoAddress < PmmGetHhdmOffset()) {
+		InfoAddress += PmmGetHhdmOffset();
+	}
+
+	Info = (const BootInfo *)(uintptr_t)InfoAddress;
+	if (Info == 0 || Info->Magic != BootInfoMagic) {
+		FatalBoot("core.mm.paging", "failed to map boot info");
+	}
+
+	return Info;
+}
+
+static void InitStorage(void)
+{
+	static Fat32Volume Volumes[DiskMaxCount];
+	const DiskInfo *BootDisk;
+	char VolumeRoot[VfsPathMax];
+	bool BootMounted = false;
+
+	if (!DiskInit()) {
+		LogWarn("core.sys.fs", "disk init failed; skipping root mount");
+		return;
+	}
+
+	BootDisk = DiskGetBootDisk();
+	if (BootDisk == 0 ||
+		!BuildVolumeRoot(VolumeRoot, sizeof(VolumeRoot), BootDisk->VolumeId)) {
+		LogWarn("core.sys.fs", "invalid boot volume");
+		return;
+	}
+
+	for (size_t Index = 0; Index < DiskGetCount() && Index < DiskMaxCount;
+		 ++Index) {
+		const DiskInfo *Disk = DiskGetInfo(Index);
+
+		if (Disk == 0 || Disk->Device == 0) {
+			continue;
+		}
+
+		if (!Fat32Mount(&Volumes[Index], Disk->Device)) {
+			LogWarn("core.sys.fs", "%s has no mountable FAT32 volume",
+					Disk->Name);
+			continue;
+		}
+
+		if (!VfsMount(Disk->VolumeId, Fat32GetFilesystemOps(),
+					  &Volumes[Index])) {
+			LogWarn("core.sys.fs", "VFS mount failed for %c:/",
+					Disk->VolumeId);
+			continue;
+		}
+
+		LogInfo("core.sys.fs", "%s mounted at %c:/", Disk->Name,
+				Disk->VolumeId);
+		if (Disk == BootDisk) {
+			BootMounted = true;
+		}
+	}
+
+	if (!BootMounted) {
+		LogWarn("core.sys.fs", "boot disk has no mounted filesystem");
+		return;
+	}
+
+	if (!KshInit(BootDisk->VolumeId)) {
+		LogWarn("core.sys.fs", "shell path initialization failed");
+		return;
+	}
+
+	LogInfo("core.sys.fs", "boot volume mounted at %s", VolumeRoot);
+}
+
+static void InitKeyboard(void)
+{
+	DriverRegister(&KbdDriver);
+	DeviceRegister(&KbdDevice);
+	DeviceBind(&KbdDevice, &KbdDriver);
+
+	Device *Keyboard = DeviceGet("kbd");
+	if (Keyboard != 0) {
+		DeviceControl(Keyboard, KbdCtrlEchoOff, 0);
+		LogInfo("core.sys.entry", "keyboard input online");
+	}
+}
+
 void KernelMain(const BootInfo *Info)
 {
 	SerialInit(SerialCom1, 115200);
@@ -100,9 +220,7 @@ void KernelMain(const BootInfo *Info)
 
 	if (!Info || Info->Magic != BootInfoMagic ||
 		Info->Version != BootInfoVersion || Info->Size < sizeof(BootInfo)) {
-		LogFatal("core.sys.entry", "invalid boot info");
-		for (;;)
-			__asm__ volatile("hlt");
+		FatalBoot("core.sys.entry", "invalid boot info");
 	}
 
 	LogInit(Info->Cmdline);
@@ -129,16 +247,13 @@ void KernelMain(const BootInfo *Info)
 
 	if (!PageDbInit(Info->MemoryMap, Info->MemoryMapEntriesCount,
 					Info->HhdmOffset)) {
-		LogFatal("core.mm.pagedb", "failed to initialize page database");
-		for (;;)
-			__asm__ volatile("hlt");
+		FatalBoot("core.mm.pagedb", "failed to initialize page database");
 	}
 	LogOk("core.mm.pagedb", "page database online");
 
 	if (!PmmInit(Info->HhdmOffset)) {
-		LogFatal("core.mm.pmm", "failed to initialize physical memory manager");
-		for (;;)
-			__asm__ volatile("hlt");
+		FatalBoot("core.mm.pmm",
+				  "failed to initialize physical memory manager");
 	}
 	LogOk("core.mm.pmm", "physical memory manager online");
 
@@ -148,61 +263,39 @@ void KernelMain(const BootInfo *Info)
 	}
 
 	IrqInit();
+	/* PIT is used for short I/O delays (does not require IRQs enabled). */
+	PitInit(100);
 
 	BootInfoPhysical = (uint64_t)(uintptr_t)Info;
 
 	uint64_t StackBase = PmmAllocPagesPhys(KernelStackPages);
 	if (StackBase == 0) {
-		LogFatal("core.sys.entry", "failed to allocate kernel stack");
-		for (;;)
-			__asm__ volatile("hlt");
+		FatalBoot("core.sys.entry", "failed to allocate kernel stack");
 	}
 
 	LogDebug("core.sys.entry", "switching to kernel stack 0x%llx",
 			 (unsigned long long)(StackBase + (KernelStackPages * PageSize)));
 	if (!PagingInit(Info, StackBase + (KernelStackPages * PageSize))) {
-		LogFatal("core.mm.paging", "failed to initialize kernel page tables");
-		for (;;)
-			__asm__ volatile("hlt");
+		FatalBoot("core.mm.paging", "failed to initialize kernel page tables");
 	}
 
-	uint64_t InfoAddress = BootInfoPhysical;
-	if (InfoAddress < PmmGetHhdmOffset()) {
-		InfoAddress += PmmGetHhdmOffset();
-	}
-	Info = (const BootInfo *)(uintptr_t)InfoAddress;
-	if (Info == 0 || Info->Magic != BootInfoMagic) {
-		LogFatal("core.mm.paging", "failed to map boot info");
-		for (;;)
-			__asm__ volatile("hlt");
-	}
+	Info = MapBootInfo(Info);
 
 	LogOk("core.mm.paging", "kernel page tables active");
 
 	VmmInit();
 	LogOk("core.mm.vmm", "virtual memory manager online");
 	if (!HeapInit()) {
-		LogFatal("core.mm.heap", "failed to initialize kernel heap");
-		for (;;)
-			__asm__ volatile("hlt");
+		FatalBoot("core.mm.heap", "failed to initialize kernel heap");
 	}
 	LogOk("core.mm.heap", "kernel heap online");
 
-	DriverRegister(&KbdDriver);
-	DeviceRegister(&KbdDevice);
-	DeviceBind(&KbdDevice, &KbdDriver);
+	InitStorage();
+	InitKeyboard();
 
-	PitInit(100);
-	LogInfo("core.sys.entry", "avOS kernel v1.0 finsihed initializing!");
-
-	Device *kbd = DeviceGet("kbd");
-	if (kbd) {
-		DeviceControl(kbd, KbdCtrlEchoOn, 0);
-		LogInfo("core.sys.entry", "Keyboard ECHO enabled");
-	}
+	LogInfo("core.sys.entry", "avOS kernel v1.0 finished initializing!");
 
 	__asm__ volatile("sti");
-	for (;;) {
-		__asm__ volatile("hlt");
-	}
+	KshRun();
+	HaltForever();
 }

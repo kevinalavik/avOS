@@ -4,7 +4,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-#define BootConfigPath "/avboot.conf"
+#define BootConfigPath "/Boot/AvBoot.conf"
 #define KernelConfigKey "kernel="
 #define FramebufferConfigKey "framebuffer="
 #define CmdlineConfigKey "cmdline="

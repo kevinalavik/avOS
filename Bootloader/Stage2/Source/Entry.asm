@@ -8,7 +8,7 @@ extern S2Entry
 extern __bss_start
 extern __bss_end
 
-%include "Bootstrap/Include/ProtectedMode.inc"
+%include "Architecture/ProtectedMode.inc"
 
 MemoryMapMaxEntries equ 32
 MemoryMapEntrySize  equ 24
