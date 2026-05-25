@@ -66,8 +66,7 @@ static const AtaProbeTarget AtaProbeTargets[] = {
 
 static uint8_t AtaSelectValue(const AtaDevice *Device, uint32_t Lba)
 {
-	return (uint8_t)(0xE0 | (Device->Drive << 4) |
-					 ((Lba >> 24) & 0x0F));
+	return (uint8_t)(0xE0 | (Device->Drive << 4) | ((Lba >> 24) & 0x0F));
 }
 
 static uint8_t AtaIdentifySelectValue(const AtaProbeTarget *Target)
@@ -77,7 +76,7 @@ static uint8_t AtaIdentifySelectValue(const AtaProbeTarget *Target)
 
 static void AtaDelay400ns(uint16_t CtrlBase)
 {
-	/* Reading the alternate status port 4 times is ~400ns. */
+	// ish 400ns i think
 	(void)PortIORead8(CtrlBase);
 	(void)PortIORead8(CtrlBase);
 	(void)PortIORead8(CtrlBase);
@@ -86,7 +85,6 @@ static void AtaDelay400ns(uint16_t CtrlBase)
 
 static bool AtaWaitNotBusy(uint16_t IoBase, uint32_t Timeout)
 {
-	/* Timeout is interpreted as microseconds. */
 	while (Timeout-- > 0) {
 		uint8_t Status = PortIORead8(IoBase + AtaRegStatus);
 		if ((Status & AtaStatusBsy) == 0) {
@@ -126,7 +124,7 @@ static bool AtaIdentify(const AtaProbeTarget *Target)
 				 AtaIdentifySelectValue(Target));
 	AtaDelay400ns(Target->CtrlBase);
 
-	/* If status is 0xFF, likely no device on the bus. */
+	/* If status is 0xFF there is prob no data. */
 	uint8_t Status = PortIORead8(Target->IoBase + AtaRegStatus);
 	if (Status == 0xFF) {
 		return false;
