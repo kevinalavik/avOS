@@ -14,7 +14,6 @@ static int PitInitialized;
 
 static uint16_t PitReadCounter0(void)
 {
-	/* Latch channel 0 count value. */
 	PortIOWrite8(PitCommand, 0x00);
 	uint8_t lo = PortIORead8(PitChannel0);
 	uint8_t hi = PortIORead8(PitChannel0);
@@ -23,10 +22,6 @@ static uint16_t PitReadCounter0(void)
 
 static void PitWaitBaseCycles(uint64_t Cycles)
 {
-	/*
-	 * PIT counter counts down from divisor to 0, then reloads.
-	 * We accumulate elapsed cycles across wrap by comparing successive reads.
-	 */
 	uint16_t prev = PitReadCounter0();
 	uint64_t elapsed = 0;
 
@@ -36,7 +31,6 @@ static void PitWaitBaseCycles(uint64_t Cycles)
 		if (now <= prev) {
 			delta = (uint16_t)(prev - now);
 		} else {
-			/* Wrapped: prev -> 0 then reload -> now. */
 			delta = (uint16_t)(prev + (uint16_t)(PitDivisor - now));
 		}
 		elapsed += delta;
