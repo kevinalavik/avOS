@@ -49,7 +49,7 @@ static bool IsFat32Partition(uint8_t Type)
 }
 
 static bool FindPartition(const BlockFs *Block, uint8_t *SectorBuffer,
-					  uint32_t *PartitionLba)
+						  uint32_t *PartitionLba)
 {
 	if (!BlockFsReadSectors(Block, 0, 1, SectorBuffer)) {
 		LogError("fs.fat32", "failed to read MBR");
@@ -81,7 +81,7 @@ static uint32_t ClusterToLba(const Fat32Volume *Volume, uint32_t Cluster)
 }
 
 static bool ReadFatEntry(const Fat32Volume *Volume, uint32_t Cluster,
-					 uint32_t *NextCluster)
+						 uint32_t *NextCluster)
 {
 	uint32_t Offset = Cluster * 4u;
 	uint32_t Sector = Volume->FatLba + (Offset / DiskSectorSize);
@@ -196,7 +196,7 @@ static void ClearLongName(char LongName[Fat32LongNameMax], bool *HaveLongName)
 }
 
 static void StoreLongNameChar(char LongName[Fat32LongNameMax], size_t Index,
-						  uint16_t Character)
+							  uint16_t Character)
 {
 	if (Index + 1u >= Fat32LongNameMax || Character == 0x0000 ||
 		Character == 0xffff) {
@@ -207,8 +207,8 @@ static void StoreLongNameChar(char LongName[Fat32LongNameMax], size_t Index,
 }
 
 static void ReadLongNameEntry(const uint8_t *Entry,
-						 char LongName[Fat32LongNameMax],
-						 bool *HaveLongName)
+							  char LongName[Fat32LongNameMax],
+							  bool *HaveLongName)
 {
 	static const uint8_t Offsets[13] = {
 		1, 3, 5, 7, 9, 14, 16, 18, 20, 22, 24, 28, 30,
@@ -234,10 +234,10 @@ static void ReadLongNameEntry(const uint8_t *Entry,
 }
 
 static bool FindDirectoryEntry(const Fat32Volume *Volume,
-						   uint32_t DirectoryCluster,
-						   const char *SearchLongName,
-						   size_t SearchLongNameLength,
-						   Fat32DirectoryEntry *Found)
+							   uint32_t DirectoryCluster,
+							   const char *SearchLongName,
+							   size_t SearchLongNameLength,
+							   Fat32DirectoryEntry *Found)
 {
 	uint32_t Cluster = DirectoryCluster;
 	char LongNameBuffer[Fat32LongNameMax];
@@ -250,7 +250,7 @@ static bool FindDirectoryEntry(const Fat32Volume *Volume,
 
 		for (uint8_t Sector = 0; Sector < Volume->SectorsPerCluster; ++Sector) {
 			if (!BlockFsReadSectors(&Volume->Block, ClusterLba + Sector, 1,
-								Volume->SectorBuffer)) {
+									Volume->SectorBuffer)) {
 				LogError("fs.fat32", "failed to read directory cluster %u",
 						 (unsigned int)Cluster);
 				return false;
@@ -297,9 +297,9 @@ static bool FindDirectoryEntry(const Fat32Volume *Volume,
 	return true;
 }
 
-static bool FindInDirectory(const Fat32Volume *Volume, uint32_t DirectoryCluster,
-						const char *Name, size_t NameLength,
-						Fat32DirectoryEntry *Entry)
+static bool FindInDirectory(const Fat32Volume *Volume,
+							uint32_t DirectoryCluster, const char *Name,
+							size_t NameLength, Fat32DirectoryEntry *Entry)
 {
 	if (NameLength >= Fat32LongNameMax) {
 		return false;
@@ -316,7 +316,7 @@ static bool FindInDirectory(const Fat32Volume *Volume, uint32_t DirectoryCluster
 }
 
 static bool Fat32FindPath(const Fat32Volume *Volume, const char *Path,
-					  Fat32DirectoryEntry *Entry)
+						  Fat32DirectoryEntry *Entry)
 {
 	uint32_t DirectoryCluster = Volume->RootCluster;
 	const char *Segment = Path;
@@ -341,7 +341,7 @@ static bool Fat32FindPath(const Fat32Volume *Volume, const char *Path,
 
 		size_t SegmentLength = (size_t)(Cursor - Segment);
 		if (!FindInDirectory(Volume, DirectoryCluster, Segment, SegmentLength,
-						 Entry)) {
+							 Entry)) {
 			return false;
 		}
 
@@ -398,11 +398,12 @@ bool Fat32Mount(Fat32Volume *Volume, const BlockDevice *Device)
 
 	if (BytesPerSector != DiskSectorSize || SectorsPerCluster == 0 ||
 		FatCount == 0 || SectorsPerFat == 0 || RootCluster < 2) {
-		LogError("fs.fat32",
-				 "unsupported BPB: bytes/sector %u SPC %u FATs %u SPF %u root %u",
-				 (unsigned int)BytesPerSector, (unsigned int)SectorsPerCluster,
-				 (unsigned int)FatCount, (unsigned int)SectorsPerFat,
-				 (unsigned int)RootCluster);
+		LogError(
+			"fs.fat32",
+			"unsupported BPB: bytes/sector %u SPC %u FATs %u SPF %u root %u",
+			(unsigned int)BytesPerSector, (unsigned int)SectorsPerCluster,
+			(unsigned int)FatCount, (unsigned int)SectorsPerFat,
+			(unsigned int)RootCluster);
 		return false;
 	}
 
@@ -415,15 +416,15 @@ bool Fat32Mount(Fat32Volume *Volume, const BlockDevice *Device)
 	Volume->RootCluster = RootCluster;
 
 	LogOk("fs.fat32", "mounted: SPC=%u FATs=%u SPF=%u dataLBA=%u root=%u",
-		  (unsigned int)Volume->SectorsPerCluster, (unsigned int)Volume->FatCount,
-		  (unsigned int)Volume->SectorsPerFat, (unsigned int)Volume->DataLba,
-		  (unsigned int)Volume->RootCluster);
+		  (unsigned int)Volume->SectorsPerCluster,
+		  (unsigned int)Volume->FatCount, (unsigned int)Volume->SectorsPerFat,
+		  (unsigned int)Volume->DataLba, (unsigned int)Volume->RootCluster);
 	return true;
 }
 
 size_t Fat32ReadFileAt(const Fat32Volume *Volume,
-				   const Fat32DirectoryEntry *Entry, size_t Offset,
-				   void *Buffer, size_t Length)
+					   const Fat32DirectoryEntry *Entry, size_t Offset,
+					   void *Buffer, size_t Length)
 {
 	if (Volume == 0 || Entry == 0 || Buffer == 0) {
 		return 0;
@@ -457,7 +458,7 @@ size_t Fat32ReadFileAt(const Fat32Volume *Volume,
 			}
 
 			if (!BlockFsReadSectors(&Volume->Block, ClusterLba + Sector, 1,
-								Volume->ScratchBuffer)) {
+									Volume->ScratchBuffer)) {
 				return TotalRead;
 			}
 
@@ -554,7 +555,7 @@ static bool Fat32VfsStat(void *Filesystem, const VfsNode *Node, VfsStat *Out)
 }
 
 static size_t Fat32VfsRead(void *Filesystem, const VfsNode *Node, size_t Offset,
-					  void *Buffer, size_t Length)
+						   void *Buffer, size_t Length)
 {
 	if (Filesystem == 0 || Node == 0) {
 		return 0;
@@ -562,11 +563,11 @@ static size_t Fat32VfsRead(void *Filesystem, const VfsNode *Node, size_t Offset,
 	const Fat32DirectoryEntry *Entry =
 		(const Fat32DirectoryEntry *)Node->PrivateData;
 	return Fat32ReadFileAt((const Fat32Volume *)Filesystem, Entry, Offset,
-						 Buffer, Length);
+						   Buffer, Length);
 }
 
 static bool Fat32VfsReadDir(void *Filesystem, const VfsNode *Directory,
-						 size_t Index, VfsDirent *Out)
+							size_t Index, VfsDirent *Out)
 {
 	if (Filesystem == 0 || Directory == 0 || Out == 0 ||
 		(Directory->Flags & VfsNodeFlagDirectory) == 0) {
@@ -588,7 +589,7 @@ static bool Fat32VfsReadDir(void *Filesystem, const VfsNode *Directory,
 
 		for (uint8_t Sector = 0; Sector < Volume->SectorsPerCluster; ++Sector) {
 			if (!BlockFsReadSectors(&Volume->Block, ClusterLba + Sector, 1,
-								Volume->SectorBuffer)) {
+									Volume->SectorBuffer)) {
 				return false;
 			}
 

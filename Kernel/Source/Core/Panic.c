@@ -1,4 +1,5 @@
 #include <Core/Panic.h>
+#include <Drivers/Display/FbConsole.h>
 #include <Library/Printf.h>
 
 #include <stdarg.h>
@@ -13,9 +14,17 @@
 	Printf("  %-3s: 0x%016llx  %-3s: 0x%016llx\n", NameA, \
 		   (unsigned long long)(ValueA), NameB, (unsigned long long)(ValueB))
 
+#define REG1(NameA, ValueA) \
+	Printf("  %-3s: 0x%016llx\n", NameA, (unsigned long long)(ValueA))
+
 void Panic(Frame *frame, const char *Reason, ...)
 {
 	__asm__ volatile("cli");
+
+	/* Aether marks the framebuffer as claimed when it takes over the
+	 * display.  Force it back so panic output always reaches flanterm
+	 * regardless of what userspace was doing when we faulted. */
+	FbConsoleForceClaim();
 
 	PrintLine("========== KERNEL PANIC ==========");
 
@@ -50,15 +59,15 @@ void Panic(Frame *frame, const char *Reason, ...)
 
 	PrintLine("");
 
-	REG3("rip", frame->rip, "rsp", frame->rsp, "rbp", frame->rbp);
+	REG2("rip", frame->rip, "rbp", frame->rbp);
 	REG3("rax", frame->rax, "rbx", frame->rbx, "rcx", frame->rcx);
 	REG3("rdx", frame->rdx, "rsi", frame->rsi, "rdi", frame->rdi);
 	REG3("r8", frame->r8, "r9", frame->r9, "r10", frame->r10);
 	REG3("r11", frame->r11, "r12", frame->r12, "r13", frame->r13);
 	REG2("r14", frame->r14, "r15", frame->r15);
-	REG3("cs", frame->cs, "ss", frame->ss, "rflags", frame->rflags);
+	REG2("cs", frame->cs, "rflags", frame->rflags);
 	REG3("cr0", frame->cr0, "cr2", frame->cr2, "cr3", frame->cr3);
-	REG2("cr4", frame->cr4, "", 0);
+	REG1("cr4", frame->cr4);
 
 	PrintLine("========= system halted =========");
 

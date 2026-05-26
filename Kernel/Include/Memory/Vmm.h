@@ -25,7 +25,10 @@ typedef struct VmmRegion {
 } VmmRegion;
 
 void VmmInit(void);
+uint64_t VmmReserveFixedRegion(uint64_t Base, uint64_t Size, uint64_t Flags);
 uint64_t VmmReserveRegion(uint64_t Size, uint64_t Flags);
+uint64_t VmmReserveRegionInRange(uint64_t SearchBase, uint64_t SearchSize,
+								 uint64_t Size, uint64_t Flags);
 bool VmmCommitRange(uint64_t Base, uint64_t Size, uint64_t PagingFlags);
 bool VmmUncommitRange(uint64_t Base, uint64_t Size);
 uint64_t VmmMapAnonymous(uint64_t Size, uint64_t RegionFlags,

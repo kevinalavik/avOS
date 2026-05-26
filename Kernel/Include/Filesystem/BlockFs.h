@@ -15,6 +15,6 @@ typedef struct BlockFs {
 } BlockFs;
 
 bool BlockFsReadSectors(const BlockFs *Block, uint32_t Lba, uint8_t Count,
-					void *Buffer);
+						void *Buffer);
 
 #endif

@@ -1,5 +1,6 @@
 #include <Core/Log.h>
 #include <Library/Printf.h>
+#include <Library/Stdout.h>
 
 #include <stdarg.h>
 
@@ -15,9 +16,9 @@ typedef struct LogStyle {
 static const LogStyle LogStyles[] = {
 	[LogLevelTrace] = { "trace", ESC "[90m" },
 	[LogLevelDebug] = { "debug", ESC "[94m" },
-	[LogLevelInfo]  = { "info",  ESC "[97m" },
-	[LogLevelOk]    = { "ok",    ESC "[92m" },
-	[LogLevelWarn]  = { "warn",  ESC "[93m" },
+	[LogLevelInfo] = { "info", ESC "[97m" },
+	[LogLevelOk] = { "ok", ESC "[92m" },
+	[LogLevelWarn] = { "warn", ESC "[93m" },
 	[LogLevelError] = { "error", ESC "[91m" },
 	[LogLevelFatal] = { "fatal", ESC "[1;91m" },
 };
@@ -32,45 +33,67 @@ static LogLevel NormalizeLevel(LogLevel Level)
 	return Level;
 }
 
-static int ParseLoglevel(const char *Cmdline)
+static const char *FindCmdlineValue(const char *Cmdline, const char *Name)
 {
-	const char *p = Cmdline;
+	const char *Cursor = Cmdline;
+	int NameLength = 0;
 
-	while (*p != '\0') {
-		const char *start = p;
+	while (Name[NameLength] != '\0')
+		++NameLength;
 
-		while (*p != '\0' && *p != ' ' && *p != '\t' && *p != '=')
-			++p;
+	while (Cursor != 0 && *Cursor != '\0') {
+		const char *TokenStart;
+		int Index = 0;
 
-		if ((p - start) >= 8) {
-			const char *tail = p - 8;
-			int match = 1;
+		while (*Cursor == ' ' || *Cursor == '\t')
+			++Cursor;
 
-			for (int i = 0; i < 8; ++i) {
-				if (tail[i] != "loglevel"[i]) {
-					match = 0;
-					break;
-				}
-			}
+		TokenStart = Cursor;
+		while (*Cursor != '\0' && *Cursor != ' ' && *Cursor != '\t' &&
+			   *Cursor != '=')
+			++Cursor;
 
-			if (match) {
-				while (*p == ' ' || *p == '\t' || *p == '=')
-					++p;
+		while (Index < NameLength && TokenStart[Index] == Name[Index])
+			++Index;
 
-				int value = 0;
-				while (*p >= '0' && *p <= '9') {
-					value = value * 10 + (*p - '0');
-					++p;
-				}
-				return value;
-			}
+		if (Index == NameLength &&
+			(TokenStart[Index] == '\0' || TokenStart[Index] == ' ' ||
+			 TokenStart[Index] == '\t' || TokenStart[Index] == '=')) {
+			while (*Cursor == ' ' || *Cursor == '\t' || *Cursor == '=')
+				++Cursor;
+			return Cursor;
 		}
 
-		if (*p != '\0')
-			++p;
+		while (*Cursor != '\0' && *Cursor != ' ' && *Cursor != '\t')
+			++Cursor;
 	}
 
-	return -1;
+	return 0;
+}
+
+static int ParseLoglevel(const char *Cmdline)
+{
+	const char *Value = FindCmdlineValue(Cmdline, "loglevel");
+	int Level = 0;
+
+	if (Value == 0) {
+		Value = FindCmdlineValue(Cmdline, "-loglevel");
+	}
+
+	if (Value == 0) {
+		return -1;
+	}
+
+	if (*Value < '0' || *Value > '9') {
+		return -1;
+	}
+
+	while (*Value >= '0' && *Value <= '9') {
+		Level = Level * 10 + (*Value - '0');
+		++Value;
+	}
+
+	return Level;
 }
 
 int LogShouldWrite(LogLevel Level)
@@ -87,6 +110,7 @@ static void LogVWrite(LogLevel Level, const char *Component, const char *Format,
 	if (!LogShouldWrite(Level))
 		return;
 
+	StdoutLock();
 	if (Component != 0 && Component[0] != '\0') {
 		Printf("[%s] ", Component);
 	}
@@ -94,6 +118,7 @@ static void LogVWrite(LogLevel Level, const char *Component, const char *Format,
 	Printf("%s%s" RESET ": ", Style->Color, Style->Label);
 	VPrintf(Format, Arguments);
 	Printf("\n");
+	StdoutUnlock();
 }
 
 void LogInit(const char *Cmdline)

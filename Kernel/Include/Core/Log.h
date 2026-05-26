@@ -18,11 +18,11 @@ int LogShouldWrite(LogLevel Level);
 
 void LogWrite(LogLevel Level, const char *Component, const char *Format, ...);
 
-#define LogAt(Level, Component, Format, ...)                       \
-	do {                                                           \
-		if (LogShouldWrite(Level)) {                               \
-			LogWrite(Level, Component, Format, ##__VA_ARGS__);     \
-		}                                                          \
+#define LogAt(Level, Component, Format, ...)                   \
+	do {                                                       \
+		if (LogShouldWrite(Level)) {                           \
+			LogWrite(Level, Component, Format, ##__VA_ARGS__); \
+		}                                                      \
 	} while (0)
 
 #define LogTrace(Component, Format, ...) \

@@ -91,7 +91,7 @@ bool FileSeek(File *Handle, size_t Position)
 
 	if (Position > Handle->Node.Size) {
 		DebugLog("VFS", "seek past EOF: %u > %u", (unsigned int)Position,
-				(unsigned int)Handle->Node.Size);
+				 (unsigned int)Handle->Node.Size);
 		return false;
 	}
 

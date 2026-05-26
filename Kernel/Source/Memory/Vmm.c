@@ -166,6 +166,91 @@ uint64_t VmmReserveRegion(uint64_t Size, uint64_t Flags)
 	return 0;
 }
 
+uint64_t VmmReserveRegionInRange(uint64_t SearchBase, uint64_t SearchSize,
+								 uint64_t Size, uint64_t Flags)
+{
+	Size = AlignUp(Size, PageSize);
+	if (Size == 0 || Size > SearchSize) {
+		return 0;
+	}
+
+	uint64_t AlignedBase = AlignUp(SearchBase, PageSize);
+	if (AlignedBase > SearchBase + SearchSize - Size) {
+		return 0;
+	}
+
+	for (uint64_t Base = AlignedBase; Base <= SearchBase + SearchSize - Size;
+		 Base += PageSize) {
+		bool Used = false;
+
+		for (uint64_t Index = 0; Index < VmmMaxRegions; ++Index) {
+			if ((Regions[Index].Flags & VmmRegionReserved) == 0) {
+				continue;
+			}
+
+			if (RangesOverlap(Base, Size, Regions[Index].Base,
+							  Regions[Index].Size)) {
+				Used = true;
+				Base = AlignUp(Regions[Index].Base + Regions[Index].Size,
+							   PageSize) -
+					   PageSize;
+				break;
+			}
+		}
+
+		if (Used) {
+			continue;
+		}
+
+		VmmRegion *Region = AllocRegionSlot();
+		if (Region == 0) {
+			return 0;
+		}
+
+		Region->Base = Base;
+		Region->Size = Size;
+		Region->Committed = 0;
+		Region->Flags = Flags | VmmRegionReserved;
+		++RegionCount;
+		return Base;
+	}
+
+	return 0;
+}
+
+uint64_t VmmReserveFixedRegion(uint64_t Base, uint64_t Size, uint64_t Flags)
+{
+	Base = AlignDown(Base, PageSize);
+	Size = AlignUp(Size, PageSize);
+	if (Size == 0) {
+		return 0;
+	}
+
+	for (uint64_t Index = 0; Index < VmmMaxRegions; ++Index) {
+		if ((Regions[Index].Flags & VmmRegionReserved) == 0) {
+			continue;
+		}
+
+		if (RangesOverlap(Base, Size, Regions[Index].Base,
+						  Regions[Index].Size)) {
+			return 0;
+		}
+	}
+
+	VmmRegion *Region = AllocRegionSlot();
+	if (Region == 0) {
+		LogError("core.mm.vmm", "out of region slots");
+		return 0;
+	}
+
+	Region->Base = Base;
+	Region->Size = Size;
+	Region->Committed = 0;
+	Region->Flags = Flags | VmmRegionReserved;
+	++RegionCount;
+	return Base;
+}
+
 bool VmmCommitRange(uint64_t Base, uint64_t Size, uint64_t PagingFlags)
 {
 	uint64_t RequestedEnd;
@@ -231,15 +316,13 @@ bool VmmUncommitRange(uint64_t Base, uint64_t Size)
 
 	for (uint64_t Address = Start; Address < End; Address += PageSize) {
 		uint64_t PhysicalAddress = PagingVirtToPhys(Address);
-		if (PhysicalAddress != 0 &&
-			(Region->Flags & VmmRegionAnonymous) != 0) {
+		if (PhysicalAddress != 0 && (Region->Flags & VmmRegionAnonymous) != 0) {
 			PmmFreePagePhys(PhysicalAddress);
 		}
 		PagingUnmapPage(Address);
 	}
 
-	if (Start <= Region->Base &&
-		End >= Region->Base + Region->Committed) {
+	if (Start <= Region->Base && End >= Region->Base + Region->Committed) {
 		Region->Committed = 0;
 	} else if (End >= Region->Base + Region->Committed &&
 			   Start >= Region->Base) {

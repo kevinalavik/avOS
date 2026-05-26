@@ -78,9 +78,9 @@ static bool FindMemoryMapLimit(const BootMemoryMapEntry *MemoryMap,
 			continue;
 		}
 
-		LogDebug("core.mm.pagedb", "memmap[%u]: %s 0x%llx-0x%llx", (unsigned int)Index,
-				 MemoryTypeName(Entry->Type), (unsigned long long)Entry->Base,
-				 (unsigned long long)End);
+		LogDebug("core.mm.pagedb", "memmap[%u]: %s 0x%llx-0x%llx",
+				 (unsigned int)Index, MemoryTypeName(Entry->Type),
+				 (unsigned long long)Entry->Base, (unsigned long long)End);
 
 		if (Entry->Type == BootMemoryTypeUsable && End > HighestEnd) {
 			HighestEnd = End;
@@ -204,7 +204,8 @@ bool PageDbInit(const BootMemoryMapEntry *MemoryMap, uint32_t EntriesCount,
 
 	if (!FindMemoryMapLimit(MemoryMap, EntriesCount) ||
 		!ReserveStorage(MemoryMap, EntriesCount)) {
-		LogError("core.mm.pagedb", "no usable low-memory range for page database");
+		LogError("core.mm.pagedb",
+				 "no usable low-memory range for page database");
 		return false;
 	}
 

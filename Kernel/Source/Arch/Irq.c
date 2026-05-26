@@ -68,11 +68,11 @@ static void IoApicWrite(uint64_t Base, uint32_t Reg, uint32_t Val)
 	*(volatile uint32_t *)Base;
 }
 
-static void IrqHandlerDefault(Frame *Frame)
+static Frame *IrqHandlerDefault(Frame *CpuFrame)
 {
-	(void)Frame;
 	LogWarn("core.arch.irq", "unhandled IRQ %llu",
-			(unsigned long long)(Frame->vector - PicIrqBase));
+			(unsigned long long)(CpuFrame->vector - PicIrqBase));
+	return CpuFrame;
 }
 
 static void IrqInitPic(void)
@@ -289,12 +289,16 @@ void IrqRegisterHandler(uint8_t Irq, IrqHandler Handler)
 	}
 }
 
-void IrqDispatch(Frame *Frame)
+Frame *IrqDispatch(Frame *CpuFrame)
 {
-	uint8_t irq = Frame->vector - PicIrqBase;
+	uint8_t irq = CpuFrame->vector - PicIrqBase;
+	Frame *NextFrame = CpuFrame;
 
 	if (irq < IrqCount) {
-		IrqHandlers[irq](Frame);
+		NextFrame = IrqHandlers[irq](CpuFrame);
+		if (NextFrame == 0) {
+			NextFrame = CpuFrame;
+		}
 	}
 
 	if (UseApic) {
@@ -305,4 +309,6 @@ void IrqDispatch(Frame *Frame)
 		}
 		PortIOWrite8(PicMasterCmd, 0x20);
 	}
+
+	return NextFrame;
 }

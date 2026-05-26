@@ -96,7 +96,7 @@ static uint64_t AllocTable(void)
 	return PhysicalAddress;
 }
 
-static bool GetOrCreateTable(uint64_t *Parent, uint16_t Index,
+static bool GetOrCreateTable(uint64_t *Parent, uint16_t Index, uint64_t Flags,
 							 uint64_t *PhysicalOut)
 {
 	if ((Parent[Index] & PagingFlagPresent) == 0) {
@@ -107,6 +107,10 @@ static bool GetOrCreateTable(uint64_t *Parent, uint16_t Index,
 
 		Parent[Index] =
 			PhysicalAddress | PagingFlagPresent | PagingFlagWritable;
+	}
+
+	if ((Flags & PagingFlagUser) != 0) {
+		Parent[Index] |= PagingFlagUser;
 	}
 
 	*PhysicalOut = Parent[Index] & ~0xfffull;
@@ -125,17 +129,17 @@ bool PagingMapPage(uint64_t VirtualAddress, uint64_t PhysicalAddress,
 		return false;
 	}
 
-	if (!GetOrCreateTable(Pml4, Pml4Index(VirtualAddress), &PdptPhys)) {
+	if (!GetOrCreateTable(Pml4, Pml4Index(VirtualAddress), Flags, &PdptPhys)) {
 		return false;
 	}
 
 	uint64_t *Pdpt = TableFromPhys(PdptPhys);
-	if (!GetOrCreateTable(Pdpt, PdptIndex(VirtualAddress), &PdPhys)) {
+	if (!GetOrCreateTable(Pdpt, PdptIndex(VirtualAddress), Flags, &PdPhys)) {
 		return false;
 	}
 
 	uint64_t *Pd = TableFromPhys(PdPhys);
-	if (!GetOrCreateTable(Pd, PdIndex(VirtualAddress), &PtPhys)) {
+	if (!GetOrCreateTable(Pd, PdIndex(VirtualAddress), Flags, &PtPhys)) {
 		return false;
 	}
 
@@ -156,19 +160,18 @@ static bool PagingMapHuge2M(uint64_t VirtualAddress, uint64_t PhysicalAddress,
 		return false;
 	}
 
-	if (!GetOrCreateTable(Pml4, Pml4Index(VirtualAddress), &PdptPhys)) {
+	if (!GetOrCreateTable(Pml4, Pml4Index(VirtualAddress), Flags, &PdptPhys)) {
 		return false;
 	}
 
 	uint64_t *Pdpt = TableFromPhys(PdptPhys);
-	if (!GetOrCreateTable(Pdpt, PdptIndex(VirtualAddress), &PdPhys)) {
+	if (!GetOrCreateTable(Pdpt, PdptIndex(VirtualAddress), Flags, &PdPhys)) {
 		return false;
 	}
 
 	uint64_t *Pd = TableFromPhys(PdPhys);
-	Pd[PdIndex(VirtualAddress)] =
-		AlignDown(PhysicalAddress, PageSize2M) | Flags | PagingFlagPresent |
-		PageHuge;
+	Pd[PdIndex(VirtualAddress)] = AlignDown(PhysicalAddress, PageSize2M) |
+								  Flags | PagingFlagPresent | PageHuge;
 	return true;
 }
 
@@ -267,8 +270,7 @@ uint64_t PagingVirtToPhys(uint64_t VirtualAddress)
 		return 0;
 	}
 	if ((Entry & PageHuge) != 0) {
-		return (Entry & PageHuge2MAddressMask) |
-			   (VirtualAddress & 0x1fffffull);
+		return (Entry & PageHuge2MAddressMask) | (VirtualAddress & 0x1fffffull);
 	}
 
 	uint64_t *Pt = TableFromPhys(Entry & ~0xfffull);
@@ -300,9 +302,9 @@ uint64_t PagingGetFlags(uint64_t VirtualAddress)
 		return 0;
 	}
 	if ((Entry & PageHuge) != 0) {
-		return Entry & (PagingFlagPresent | PagingFlagWritable |
-						PagingFlagUser | PagingFlagGlobal |
-						PagingFlagNoExecute);
+		return Entry &
+			   (PagingFlagPresent | PagingFlagWritable | PagingFlagUser |
+				PagingFlagGlobal | PagingFlagNoExecute);
 	}
 
 	uint64_t *Pd = TableFromPhys(Entry & ~0xfffull);
@@ -311,9 +313,9 @@ uint64_t PagingGetFlags(uint64_t VirtualAddress)
 		return 0;
 	}
 	if ((Entry & PageHuge) != 0) {
-		return Entry & (PagingFlagPresent | PagingFlagWritable |
-						PagingFlagUser | PagingFlagGlobal |
-						PagingFlagNoExecute);
+		return Entry &
+			   (PagingFlagPresent | PagingFlagWritable | PagingFlagUser |
+				PagingFlagGlobal | PagingFlagNoExecute);
 	}
 
 	uint64_t *Pt = TableFromPhys(Entry & ~0xfffull);
@@ -402,6 +404,12 @@ uint64_t PagingBuild(const BootInfo *Info)
 		return 0;
 	}
 
-	LogTrace("core.mm.paging", "loading cr3=0x%llx", (unsigned long long)RootTablePhys);
+	LogTrace("core.mm.paging", "loading cr3=0x%llx",
+			 (unsigned long long)RootTablePhys);
+	return RootTablePhys;
+}
+
+uint64_t PagingGetRootTablePhys(void)
+{
 	return RootTablePhys;
 }

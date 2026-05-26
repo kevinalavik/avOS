@@ -141,7 +141,8 @@ Page *PmmAllocPages(uint64_t PagesCount)
 	}
 
 	if (!TrySetContiguousState(FirstPage, PagesCount, PageFree, PageUsed)) {
-		LogWarn("core.mm.pmm", "contiguous run changed while allocating count=%llu",
+		LogWarn("core.mm.pmm",
+				"contiguous run changed while allocating count=%llu",
 				(unsigned long long)PagesCount);
 		return 0;
 	}
@@ -211,7 +212,8 @@ bool PmmFreePages(Page *PageEntry, uint64_t PagesCount)
 	}
 
 	if (!TrySetContiguousState(PageEntry, PagesCount, PageUsed, PageFree)) {
-		LogWarn("core.mm.pmm", "refusing invalid contiguous free pfn=0x%llx count=%llu",
+		LogWarn("core.mm.pmm",
+				"refusing invalid contiguous free pfn=0x%llx count=%llu",
 				(unsigned long long)PageDbPageToPfn(PageEntry),
 				(unsigned long long)PagesCount);
 		return false;

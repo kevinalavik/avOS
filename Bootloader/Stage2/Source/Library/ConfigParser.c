@@ -138,8 +138,7 @@ bool ParseCmdline(const char *Config, char Cmdline[BootCmdlineMax])
 			Config += sizeof(CmdlineConfigKey) - 1u;
 			size_t Length = 0;
 
-			while (Config[Length] != '\0' &&
-				   !IsLineBreak(Config[Length])) {
+			while (Config[Length] != '\0' && !IsLineBreak(Config[Length])) {
 				if (Length + 1u >= BootCmdlineMax) {
 					return false;
 				}

@@ -56,8 +56,7 @@ static bool ChecksumValid(const void *Data, uint32_t Length)
 
 static bool RsdpValid(const AcpiRsdp *Rsdp, uint32_t AvailableLength)
 {
-	if (!SignatureMatches(Rsdp) ||
-		!ChecksumValid(Rsdp, AcpiRsdpV1Length)) {
+	if (!SignatureMatches(Rsdp) || !ChecksumValid(Rsdp, AcpiRsdpV1Length)) {
 		return false;
 	}
 
@@ -118,8 +117,8 @@ AcpiRootPointers AcpiFindRootPointers(void)
 
 	Roots.RsdpAddress = (uint64_t)(uintptr_t)Rsdp;
 
-	DebugLog("ACPI", "RSDP 0x%08x revision %u",
-		  (unsigned int)Roots.RsdpAddress, (unsigned int)Rsdp->Revision);
+	DebugLog("ACPI", "RSDP 0x%08x revision %u", (unsigned int)Roots.RsdpAddress,
+			 (unsigned int)Rsdp->Revision);
 
 	return Roots;
 }

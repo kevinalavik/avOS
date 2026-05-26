@@ -243,6 +243,6 @@ bool Elf64Load(const char *Path, uint64_t *EntryAddress)
 	LoadedEnd = LoadEnd;
 	*EntryAddress = Header->Entry;
 	DebugLog("ELF64", "entry 0x%08x%08x", (unsigned int)(Header->Entry >> 32),
-		  (unsigned int)Header->Entry);
+			 (unsigned int)Header->Entry);
 	return true;
 }

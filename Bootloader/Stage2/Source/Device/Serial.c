@@ -27,7 +27,8 @@ void SerialInit(uint16_t Port, uint32_t Baud)
 	PortIOWrite(PortIOWidth8, SerialInterrupt(Port), 0);
 	PortIOWrite(PortIOWidth8, SerialLineControl(Port), 0x80);
 	PortIOWrite(PortIOWidth8, SerialDlabLow(Port), (uint8_t)(Divisor & 0xFF));
-	PortIOWrite(PortIOWidth8, SerialDlabHigh(Port), (uint8_t)((Divisor >> 8) & 0xFF));
+	PortIOWrite(PortIOWidth8, SerialDlabHigh(Port),
+				(uint8_t)((Divisor >> 8) & 0xFF));
 	PortIOWrite(PortIOWidth8, SerialLineControl(Port), 0x03);
 	PortIOWrite(PortIOWidth8, SerialFifoControl(Port), 0xC7);
 	PortIOWrite(PortIOWidth8, SerialModemControl(Port), 0x0B);

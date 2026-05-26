@@ -49,8 +49,6 @@ typedef struct Frame {
 	uint64_t rip;
 	uint64_t cs;
 	uint64_t rflags;
-	uint64_t rsp;
-	uint64_t ss;
 } __attribute__((packed)) Frame;
 
 const char *ExceptionName(uint64_t Vector);

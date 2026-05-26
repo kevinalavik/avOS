@@ -78,8 +78,8 @@ static bool AppendMemoryMapEntry(BootMemoryMapEntry *Entries,
 
 	if (*EntriesCount >= BootMemoryMapMaxEntries) {
 		DebugLog("MEM", "dropping memory map entry 0x%08x%08x-0x%08x%08x",
-				(unsigned int)(Base >> 32), (unsigned int)Base,
-				(unsigned int)(End >> 32), (unsigned int)End);
+				 (unsigned int)(Base >> 32), (unsigned int)Base,
+				 (unsigned int)(End >> 32), (unsigned int)End);
 		return false;
 	}
 
@@ -160,8 +160,8 @@ static void ReserveMemoryMapRange(BootInfo *Info, uint32_t *EntriesCount,
 
 	*EntriesCount = NewEntriesCount;
 	DebugLog("MEM", "reserved %s: 0x%08x%08x-0x%08x%08x", Name,
-			(unsigned int)(Base >> 32), (unsigned int)Base,
-			(unsigned int)(End >> 32), (unsigned int)End);
+			 (unsigned int)(Base >> 32), (unsigned int)Base,
+			 (unsigned int)(End >> 32), (unsigned int)End);
 }
 
 static void ReserveBootloaderMemory(BootInfo *Info, uint32_t *EntriesCount)
@@ -188,8 +188,7 @@ static void ReserveBootloaderMemory(BootInfo *Info, uint32_t *EntriesCount)
 }
 
 static BootInfo *CreateBootInfo(const MemoryMap *Map, uint64_t KernelEntry,
-								const char *KernelPath,
-								const char *Cmdline,
+								const char *KernelPath, const char *Cmdline,
 								const AcpiRootPointers *AcpiRoots)
 {
 	BootInfo *Info = Alloc(sizeof(BootInfo), 16);
@@ -248,8 +247,8 @@ void S2Entry(void)
 	}
 
 	DebugLog("FAT32", "mounted partition LBA %u, root cluster %u",
-		  (unsigned int)Volume->PartitionLba,
-		  (unsigned int)Volume->RootCluster);
+			 (unsigned int)Volume->PartitionLba,
+			 (unsigned int)Volume->RootCluster);
 
 	if (!VfsMountRoot(Fat32GetFilesystemOps(), Volume)) {
 		BootError("ENTRY", "failed to mount root");
@@ -286,7 +285,8 @@ void S2Entry(void)
 
 	AcpiRootPointers AcpiRoots = AcpiFindRootPointers();
 
-	BootInfo *Info = CreateBootInfo(Map, KernelEntry, KernelPath, Cmdline, &AcpiRoots);
+	BootInfo *Info =
+		CreateBootInfo(Map, KernelEntry, KernelPath, Cmdline, &AcpiRoots);
 	if (Info == 0) {
 		BootError("ENTRY", "failed to allocate boot info");
 		goto halt;

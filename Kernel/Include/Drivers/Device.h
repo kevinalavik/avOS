@@ -30,20 +30,17 @@ void DeviceEnumerate(void (*Fn)(Device *D, void *Ctx), void *Ctx);
 
 static inline int64_t DeviceRead(Device *D, void *B, uint64_t S)
 {
-	return D && D->Drv && D->Drv->Read
-		? D->Drv->Read(D, B, S) : -1;
+	return D && D->Drv && D->Drv->Read ? D->Drv->Read(D, B, S) : -1;
 }
 
 static inline int64_t DeviceWrite(Device *D, const void *B, uint64_t S)
 {
-	return D && D->Drv && D->Drv->Write
-		? D->Drv->Write(D, B, S) : -1;
+	return D && D->Drv && D->Drv->Write ? D->Drv->Write(D, B, S) : -1;
 }
 
 static inline int64_t DeviceControl(Device *D, uint64_t C, void *A)
 {
-	return D && D->Drv && D->Drv->Control
-		? D->Drv->Control(D, C, A) : -1;
+	return D && D->Drv && D->Drv->Control ? D->Drv->Control(D, C, A) : -1;
 }
 
 #endif

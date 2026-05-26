@@ -6,16 +6,20 @@
 #include <Library/Stdout.h>
 
 #include <stdbool.h>
+#include <stdint.h>
 
 #define KbdData 0x60
 #define KbdStat 0x64
 #define KbdBufSize 256
+#define KbdKeyStateSize 512
 
 static volatile struct {
 	char Data[KbdBufSize];
 	volatile uint16_t Head;
 	volatile uint16_t Tail;
 } KbdBuffer;
+
+static volatile uint8_t KbdKeyState[KbdKeyStateSize];
 
 static struct {
 	bool Shift;
@@ -54,6 +58,29 @@ static const char KbdShft[128] = {
 	[0x35] = '?',  [0x39] = ' ',
 };
 
+static void KbdSetKey(uint16_t Key, bool Down)
+{
+	if (Key < KbdKeyStateSize)
+		KbdKeyState[Key] = Down ? 1 : 0;
+}
+
+static bool KbdIsKeyDown(uint16_t Key)
+{
+	if (Key >= KbdKeyStateSize)
+		return false;
+	return KbdKeyState[Key] != 0;
+}
+
+static void KbdUpdateMods(void)
+{
+	KbdMod.Shift = KbdIsKeyDown(KbdKeyLeftShift) ||
+					  KbdIsKeyDown(KbdKeyRightShift);
+	KbdMod.Ctrl = KbdIsKeyDown(KbdKeyLeftCtrl) ||
+					KbdIsKeyDown(KbdKeyRightCtrl);
+	KbdMod.Alt = KbdIsKeyDown(KbdKeyLeftAlt) ||
+				   KbdIsKeyDown(KbdKeyRightAlt);
+}
+
 static void KbdPutChar(char c)
 {
 	uint16_t nxt = (KbdBuffer.Head + 1) & (KbdBufSize - 1);
@@ -62,6 +89,83 @@ static void KbdPutChar(char c)
 
 	KbdBuffer.Data[KbdBuffer.Head] = c;
 	KbdBuffer.Head = nxt;
+}
+
+static void KbdPutChars(const char *Chars)
+{
+	while (*Chars)
+		KbdPutChar(*Chars++);
+}
+
+static void KbdEchoChar(char c)
+{
+	if (!KbdEcho)
+		return;
+
+	if (c == '\n') {
+		StdoutPutc('\r');
+		StdoutPutc('\n');
+	} else if (c == '\b') {
+		StdoutPutc('\b');
+		StdoutPutc(' ');
+		StdoutPutc('\b');
+	} else {
+		StdoutPutc(c);
+	}
+}
+
+static uint16_t KbdNormalKeyCode(uint8_t Key)
+{
+	char C = KbdNorm[Key];
+
+	if (C >= 'A' && C <= 'Z')
+		C = (char)(C - 'A' + 'a');
+
+	return (uint16_t)(uint8_t)C;
+}
+
+static bool KbdProcessExtended(uint8_t Scancode)
+{
+	bool Released = (Scancode & 0x80u) != 0;
+	bool Down = !Released;
+	uint8_t Key = Scancode & 0x7Fu;
+	uint16_t EventKey = KbdKeyNone;
+	const char *Text = 0;
+
+	switch (Key) {
+	case 0x1D:
+		KbdSetKey(KbdKeyRightCtrl, Down);
+		KbdUpdateMods();
+		return true;
+	case 0x38:
+		KbdSetKey(KbdKeyRightAlt, Down);
+		KbdUpdateMods();
+		return true;
+	case 0x48:
+		EventKey = KbdKeyUp;
+		Text = "\x1B[A";
+		break;
+	case 0x50:
+		EventKey = KbdKeyDown;
+		Text = "\x1B[B";
+		break;
+	case 0x4B:
+		EventKey = KbdKeyLeft;
+		Text = "\x1B[D";
+		break;
+	case 0x4D:
+		EventKey = KbdKeyRight;
+		Text = "\x1B[C";
+		break;
+	default:
+		return false;
+	}
+
+	KbdSetKey(EventKey, Down);
+	if (Down && Text != 0)
+		KbdPutChars(Text);
+
+	return true;
 }
 
 static void KbdProcessScancode(uint8_t sc)
@@ -75,28 +179,42 @@ static void KbdProcessScancode(uint8_t sc)
 
 	if (ext) {
 		ext = false;
+		KbdProcessExtended(sc);
 		return;
 	}
 
 	bool rel = (sc & 0x80) != 0;
+	bool down = !rel;
 	uint8_t key = sc & 0x7F;
 
 	switch (key) {
 	case 0x2A:
+		KbdSetKey(KbdKeyLeftShift, down);
+		KbdUpdateMods();
+		return;
 	case 0x36:
-		KbdMod.Shift = !rel;
+		KbdSetKey(KbdKeyRightShift, down);
+		KbdUpdateMods();
 		return;
 	case 0x1D:
-		KbdMod.Ctrl = !rel;
+		KbdSetKey(KbdKeyLeftCtrl, down);
+		KbdUpdateMods();
 		return;
 	case 0x38:
-		KbdMod.Alt = !rel;
+		KbdSetKey(KbdKeyLeftAlt, down);
+		KbdUpdateMods();
 		return;
 	case 0x3A:
 		if (!rel)
 			KbdMod.Caps = !KbdMod.Caps;
 		return;
 	}
+
+	uint16_t EventKey = KbdNormalKeyCode(key);
+	if (EventKey == KbdKeyNone)
+		return;
+
+	KbdSetKey(EventKey, down);
 
 	if (rel)
 		return;
@@ -112,26 +230,16 @@ static void KbdProcessScancode(uint8_t sc)
 
 	if (c) {
 		KbdPutChar(c);
-		if (KbdEcho) {
-			if (c == '\n') {
-				StdoutPutc('\r');
-				StdoutPutc('\n');
-			} else if (c == '\b') {
-				StdoutPutc('\b');
-				StdoutPutc(' ');
-				StdoutPutc('\b');
-			} else {
-				StdoutPutc(c);
-			}
-		}
+		KbdEchoChar(c);
 	}
 }
 
-static void KbdIrqHandler(Frame *Frame)
+static Frame *KbdIrqHandler(Frame *Frame)
 {
 	(void)Frame;
 	uint8_t sc = PortIORead8(KbdData);
 	KbdProcessScancode(sc);
+	return Frame;
 }
 
 static void KbdWaitWrite(void)
@@ -155,6 +263,8 @@ static void KbdBind(Device *Dev)
 	(void)Dev;
 	KbdBuffer.Head = 0;
 	KbdBuffer.Tail = 0;
+	for (uint16_t Key = 0; Key < KbdKeyStateSize; ++Key)
+		KbdKeyState[Key] = 0;
 	KbdMod.Shift = KbdMod.Ctrl = KbdMod.Alt = KbdMod.Caps = false;
 	KbdEcho = false;
 
@@ -216,6 +326,12 @@ static int64_t KbdControl(Device *Dev, uint64_t Cmd, void *Arg)
 {
 	(void)Dev;
 	(void)Arg;
+
+	if (Cmd >= KbdCtrlIsKeyDownBase &&
+		Cmd < KbdCtrlIsKeyDownBase + KbdKeyStateSize) {
+		return KbdIsKeyDown((uint16_t)(Cmd - KbdCtrlIsKeyDownBase)) ? 1 : 0;
+	}
+
 	switch (Cmd) {
 	case KbdCtrlEchoOn:
 		KbdEcho = true;
@@ -223,6 +339,8 @@ static int64_t KbdControl(Device *Dev, uint64_t Cmd, void *Arg)
 	case KbdCtrlEchoOff:
 		KbdEcho = false;
 		return 0;
+	case KbdCtrlGetCount:
+		return (int64_t)((KbdBuffer.Head - KbdBuffer.Tail) & (KbdBufSize - 1));
 	default:
 		return -1;
 	}

@@ -4,14 +4,19 @@
 #include <Arch/Idt.h>
 #include <Arch/Irq.h>
 #include <Boot/BootInfo.h>
-#include <Core/Ksh.h>
+#include <Core/Elf.h>
 #include <Core/Log.h>
+#include <Core/Scheduler.h>
 #include <Device/Framebuffer.h>
 #include <Device/Pit.h>
 #include <Device/Serial.h>
 #include <Device/TextConsole.h>
 #include <Drivers/Device.h>
+#include <Drivers/Display/Fb.h>
+#include <Drivers/Display/FbConsole.h>
+#include <Drivers/Display/TextModeConsole.h>
 #include <Drivers/Input/Keyboard.h>
+#include <Drivers/Input/Mouse.h>
 #include <Drivers/Storage/Disk.h>
 #include <Filesystem/Fat32.h>
 #include <Filesystem/Vfs.h>
@@ -31,6 +36,7 @@
 
 static struct flanterm_context *FtCtx;
 static uint64_t BootInfoPhysical;
+static char BootVolumeRoot[VfsPathMax] = "a:/";
 
 #define KernelStackPages 16ull
 
@@ -53,7 +59,7 @@ void *memcpy(void *dest, const void *src, size_t n)
 static void LogKernelPutc(char Character)
 {
 	SerialPutc(Character);
-	if (FtCtx != NULL) {
+	if (FtCtx != NULL && FbConsoleAvailable()) {
 		flanterm_write(FtCtx, &Character, 1);
 	} else if (TextConsoleReady()) {
 		TextConsolePutc(Character);
@@ -100,6 +106,7 @@ static void InitFramebufferConsole(const BootFramebuffer *Framebuffer)
 
 		if (FtCtx != NULL) {
 			StdoutPutc = LogKernelPutc;
+			FbConsoleInit(FtCtx);
 			LogOk("core.graphic.fb", "framebuffer terminal initialized");
 		} else {
 			LogWarn("core.graphic.fb", "flanterm init returned null");
@@ -121,6 +128,94 @@ static bool BuildVolumeRoot(char *Destination, size_t DestinationSize,
 	Destination[2] = '/';
 	Destination[3] = '\0';
 	return true;
+}
+
+static const char *FindCmdlineValue(const char *Cmdline, const char *Name)
+{
+	const char *Cursor = Cmdline;
+	size_t NameLength = 0;
+
+	while (Name[NameLength] != '\0') {
+		++NameLength;
+	}
+
+	while (Cursor != 0 && *Cursor != '\0') {
+		const char *TokenStart;
+		size_t Index = 0;
+
+		while (*Cursor == ' ' || *Cursor == '\t') {
+			++Cursor;
+		}
+
+		TokenStart = Cursor;
+		while (*Cursor != '\0' && *Cursor != ' ' && *Cursor != '\t' &&
+			   *Cursor != '=') {
+			++Cursor;
+		}
+
+		while (Index < NameLength && TokenStart[Index] == Name[Index]) {
+			++Index;
+		}
+
+		if (Index == NameLength &&
+			(TokenStart[Index] == '\0' || TokenStart[Index] == ' ' ||
+			 TokenStart[Index] == '\t' || TokenStart[Index] == '=')) {
+			while (*Cursor == ' ' || *Cursor == '\t' || *Cursor == '=') {
+				++Cursor;
+			}
+			return Cursor;
+		}
+
+		while (*Cursor != '\0' && *Cursor != ' ' && *Cursor != '\t') {
+			++Cursor;
+		}
+	}
+
+	return 0;
+}
+
+static void CopyToken(char *Destination, size_t DestinationSize,
+					  const char *Source)
+{
+	size_t Index = 0;
+
+	if (Destination == 0 || DestinationSize == 0) {
+		return;
+	}
+
+	while (Source != 0 && Source[Index] != '\0' && Source[Index] != ' ' &&
+		   Source[Index] != '\t' && Index + 1 < DestinationSize) {
+		Destination[Index] = Source[Index];
+		++Index;
+	}
+
+	Destination[Index] = '\0';
+}
+
+static void ResolveInitPath(const char *Cmdline, bool FramebufferPresent,
+							char Destination[VfsPathMax])
+{
+	const char *Value = 0;
+
+	if (FramebufferPresent) {
+		Value = FindCmdlineValue(Cmdline, "fbinit");
+		if (Value != 0) {
+			Destination[0] = '\0';
+			CopyToken(Destination, VfsPathMax, Value);
+			return;
+		}
+	}
+
+	Value = FindCmdlineValue(Cmdline, "init");
+
+	Destination[0] = '\0';
+	if (Value != 0) {
+		CopyToken(Destination, VfsPathMax, Value);
+		return;
+	}
+
+	CopyToken(Destination, VfsPathMax, BootVolumeRoot);
+	CopyToken(Destination + 3, VfsPathMax - 3, "System/Bin/Shell");
 }
 
 static const BootInfo *MapBootInfo(const BootInfo *Info)
@@ -174,8 +269,7 @@ static void InitStorage(void)
 
 		if (!VfsMount(Disk->VolumeId, Fat32GetFilesystemOps(),
 					  &Volumes[Index])) {
-			LogWarn("core.sys.fs", "VFS mount failed for %c:/",
-					Disk->VolumeId);
+			LogWarn("core.sys.fs", "VFS mount failed for %c:/", Disk->VolumeId);
 			continue;
 		}
 
@@ -191,11 +285,7 @@ static void InitStorage(void)
 		return;
 	}
 
-	if (!KshInit(BootDisk->VolumeId)) {
-		LogWarn("core.sys.fs", "shell path initialization failed");
-		return;
-	}
-
+	BuildVolumeRoot(BootVolumeRoot, sizeof(BootVolumeRoot), BootDisk->VolumeId);
 	LogInfo("core.sys.fs", "boot volume mounted at %s", VolumeRoot);
 }
 
@@ -214,8 +304,9 @@ static void InitKeyboard(void)
 
 void KernelMain(const BootInfo *Info)
 {
+	bool WantsFramebufferConsole;
+
 	SerialInit(SerialCom1, 115200);
-	TextConsoleInit();
 	StdoutPutc = LogKernelPutc;
 
 	if (!Info || Info->Magic != BootInfoMagic ||
@@ -227,6 +318,12 @@ void KernelMain(const BootInfo *Info)
 	LogInfo("core.sys.entry", "kernel booting");
 	LogDebug("core.sys.entry", "boot info at 0x%llx",
 			 (unsigned long long)(uintptr_t)Info);
+	WantsFramebufferConsole = Info->Framebuffer.Width != 0 &&
+							  Info->Framebuffer.Height != 0 &&
+							  Info->Framebuffer.Address != 0;
+	if (!WantsFramebufferConsole) {
+		TextConsoleInit();
+	}
 	InitFramebufferConsole(&Info->Framebuffer);
 	if (Info->AcpiRsdpAddress != 0) {
 		LogDebug("core.acpi", "RSDP=0x%llx",
@@ -262,9 +359,14 @@ void KernelMain(const BootInfo *Info)
 		MadtInit();
 	}
 
+	/* Enable SSE for userspace */
+	uint64_t Cr4;
+	__asm__ volatile("mov %%cr4, %0" : "=r"(Cr4));
+	Cr4 |= (1 << 9) | (1 << 10); /* OSFXSR | OSXMMEXCPT */
+	__asm__ volatile("mov %0, %%cr4" : : "r"(Cr4));
+
 	IrqInit();
-	/* PIT is used for short I/O delays (does not require IRQs enabled). */
-	PitInit(100);
+	PitInit(1000);
 
 	BootInfoPhysical = (uint64_t)(uintptr_t)Info;
 
@@ -293,9 +395,46 @@ void KernelMain(const BootInfo *Info)
 	InitStorage();
 	InitKeyboard();
 
+	if (FramebufferReady()) {
+		DriverRegister(&FbDriver);
+		DeviceRegister(&FbDevice);
+		DeviceBind(&FbDevice, &FbDriver);
+		LogInfo("core.sys.entry", "framebuffer device online");
+	}
+
+	if (TextConsoleReady()) {
+		DriverRegister(&TextModeConsoleDriver);
+		DeviceRegister(&TextModeConsoleDevice);
+		DeviceBind(&TextModeConsoleDevice, &TextModeConsoleDriver);
+		LogInfo("core.sys.entry", "text console online");
+	}
+
+	FbConsoleInit(FtCtx);
+	DriverRegister(&FbConsoleDriver);
+	DeviceRegister(&FbConsoleDevice);
+	DeviceBind(&FbConsoleDevice, &FbConsoleDriver);
+	LogInfo("core.sys.entry", "framebuffer console online as fbconsole");
+
+	DriverRegister(&MouseDriver);
+	DeviceRegister(&MouseDevice);
+	DeviceBind(&MouseDevice, &MouseDriver);
+	LogInfo("core.sys.entry", "mouse device online");
+
+	if (!SchedulerInit()) {
+		FatalBoot("core.sched", "failed to initialize scheduler");
+	}
+
+	char InitPath[VfsPathMax];
+	ResolveInitPath(Info->Cmdline, FramebufferReady(), InitPath);
+	if (ElfSpawn(InitPath) == 0) {
+		LogFatal("core.sys.entry", "failed to launch init '%s'", InitPath);
+		HaltForever();
+	}
+	LogInfo("core.sys.entry", "init process '%s' launched", InitPath);
+
 	LogInfo("core.sys.entry", "avOS kernel v1.0 finished initializing!");
 
 	__asm__ volatile("sti");
-	KshRun();
+	SchedulerStart();
 	HaltForever();
 }

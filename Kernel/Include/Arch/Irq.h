@@ -4,13 +4,14 @@
 #include <Arch/Idt.h>
 #include <stdint.h>
 
-#define IrqPit      0
+#define IrqPit 0
 #define IrqKeyboard 1
+#define IrqMouse 12
 
-typedef void (*IrqHandler)(Frame *Frame);
+typedef Frame *(*IrqHandler)(Frame *Frame);
 
 void IrqInit(void);
 void IrqRegisterHandler(uint8_t Irq, IrqHandler Handler);
-void IrqDispatch(Frame *Frame);
+Frame *IrqDispatch(Frame *Frame);
 
 #endif

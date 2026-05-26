@@ -45,8 +45,8 @@ static void DiskSetDescription(char Out[48], const AtaDevice *Ata)
 		Out[Write++] = Prefix[Index];
 	}
 
-	for (size_t Index = 0; Ata != 0 && Ata->Name[Index] != '\0' &&
-						 Write + 1 < 48; ++Index) {
+	for (size_t Index = 0;
+		 Ata != 0 && Ata->Name[Index] != '\0' && Write + 1 < 48; ++Index) {
 		Out[Write++] = Ata->Name[Index];
 	}
 
@@ -61,8 +61,8 @@ bool DiskInit(void)
 	}
 
 	DiskCount = 0;
-	for (size_t Index = 0; Index < AtaGetDeviceCount() &&
-						 DiskCount < DiskMaxCount; ++Index) {
+	for (size_t Index = 0;
+		 Index < AtaGetDeviceCount() && DiskCount < DiskMaxCount; ++Index) {
 		const AtaDevice *Ata = AtaGetDevice(Index);
 		DiskEntry *Entry = &DiskEntries[DiskCount];
 

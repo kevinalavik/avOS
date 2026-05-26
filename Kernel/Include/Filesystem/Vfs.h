@@ -33,7 +33,7 @@ typedef struct VfsFilesystemOps {
 	size_t (*Read)(void *Filesystem, const VfsNode *Node, size_t Offset,
 				   void *Buffer, size_t Length);
 	bool (*ReadDir)(void *Filesystem, const VfsNode *Directory, size_t Index,
-				 VfsDirent *Out);
+					VfsDirent *Out);
 } VfsFilesystemOps;
 
 typedef struct VfsVolumeInfo {
@@ -62,8 +62,7 @@ typedef struct Directory {
 	bool Open;
 } Directory;
 
-bool VfsMount(char VolumeId, const VfsFilesystemOps *Ops,
-			  void *Filesystem);
+bool VfsMount(char VolumeId, const VfsFilesystemOps *Ops, void *Filesystem);
 size_t VfsGetVolumeCount(void);
 bool VfsGetVolumeInfo(size_t Index, VfsVolumeInfo *Out);
 

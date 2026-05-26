@@ -35,6 +35,16 @@ uint32_t FramebufferHeight(void)
 	return FbHeight;
 }
 
+uint32_t FramebufferPitch(void)
+{
+	return FbStride * 4u;
+}
+
+uint64_t FramebufferPhysicalAddress(void)
+{
+	return (uint64_t)(uintptr_t)FbBase;
+}
+
 uint32_t FramebufferColor(uint8_t R, uint8_t G, uint8_t B)
 {
 	return (uint32_t)B | ((uint32_t)G << 8) | ((uint32_t)R << 16);

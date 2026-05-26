@@ -1,7 +1,9 @@
 #include <Arch/Idt.h>
 #include <Arch/Irq.h>
+#include <Core/Scheduler.h>
 #include <Core/Log.h>
 #include <Core/Panic.h>
+#include <Core/Syscall.h>
 #include <Library/Printf.h>
 #include <stddef.h>
 
@@ -63,13 +65,21 @@ const char *ExceptionName(uint64_t Vector)
 	}
 }
 
-void IdtHandle(Frame *Frame)
+Frame *IdtHandle(Frame *CpuFrame)
 {
-	if (Frame->vector < 32) {
-		Panic(Frame, ExceptionName(Frame->vector));
+	if (CpuFrame->vector < 32) {
+		Frame *HandledFrame = SchedulerHandleException(CpuFrame);
+		if (HandledFrame != 0) {
+			return HandledFrame;
+		}
+		Panic(CpuFrame, ExceptionName(CpuFrame->vector));
 	}
 
-	IrqDispatch(Frame);
+	if (CpuFrame->vector == SyscallVector) {
+		return SyscallHandle(CpuFrame);
+	}
+
+	return IrqDispatch(CpuFrame);
 }
 
 static void IdtSetEntry(size_t Vector, void *Handler, uint8_t Ist,
@@ -91,6 +101,8 @@ void IdtInit(void)
 	for (size_t i = 0; i < IdtEntryCount; ++i) {
 		IdtSetEntry(i, IsrWrapperTable[i], 0, 0x8E);
 	}
+
+	IdtSetEntry(SyscallVector, IsrWrapperTable[SyscallVector], 0, 0xEE);
 
 	__asm__ volatile("lidt %[Idtr]" ::[Idtr] "m"(KernelIdtr) : "memory");
 }

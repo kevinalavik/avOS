@@ -1,0 +1,79 @@
+--- Aether/Source/Main.c	2026-05-26 11:49:43.934604126 +0000
++++ Aether/Source/Main.c	2026-05-26 11:49:43.972005012 +0000
+@@ -27,7 +27,28 @@
+ #define APPLICATIONS_DIR "a:/Applications/"
+ #define TERMINAL_APP_PATH "a:/Applications/Terminal.app"
+ #define KBD_CTRL_GET_COUNT 3
++#define KBD_CTRL_IS_KEY_DOWN_BASE 0x10000u
+ #define MOUSE_CTRL_GET_COUNT 2
++
++#define KBD_KEY_ESCAPE 0x001Bu
++#define KBD_KEY_BACKSPACE 0x0008u
++#define KBD_KEY_TAB 0x0009u
++#define KBD_KEY_ENTER 0x000Au
++#define KBD_KEY_SPACE 0x0020u
++#define KBD_KEY_LEFT_SHIFT 0x0100u
++#define KBD_KEY_RIGHT_SHIFT 0x0101u
++#define KBD_KEY_LEFT_CTRL 0x0102u
++#define KBD_KEY_RIGHT_CTRL 0x0103u
++#define KBD_KEY_LEFT_ALT 0x0104u
++#define KBD_KEY_RIGHT_ALT 0x0105u
++#define KBD_KEY_UP 0x0110u
++#define KBD_KEY_DOWN 0x0111u
++#define KBD_KEY_LEFT 0x0112u
++#define KBD_KEY_RIGHT 0x0113u
++#define KBD_MOD_SHIFT 0x01u
++#define KBD_MOD_CTRL 0x02u
++#define KBD_MOD_ALT 0x04u
++#define KBD_MOD_CAPS 0x08u
+ #define TERMINAL_MARGIN 12
+ #define TERMINAL_ROW_HEIGHT 11
+ #define TERMINAL_HISTORY_MAX 96u
+@@ -1100,19 +1211,28 @@
+ 		if (PointerChanged)
+ 			Dirty = True;
+ 
++		AetherPollKeyboardState(&Eq, TrackedKeys, TrackedKeyCount, &GotData);
++
+ 		{
+ 			Size KbdCount;
+ 			while ((KbdCount = DeviceControl("kbd", KBD_CTRL_GET_COUNT, 0)) >
+-				   0) {
++				   0 && KbdCount != (Size)-1) {
+ 				GotData = True;
+ 				char KbdBuf[64];
+ 				if (KbdCount > sizeof(KbdBuf))
+ 					KbdCount = sizeof(KbdBuf);
+ 				KbdCount = DeviceRead("kbd", KbdBuf, KbdCount);
++				if (KbdCount == 0 || KbdCount == (Size)-1)
++					break;
+ 
+ 				for (Size ki = 0; ki < KbdCount; ki++) {
+ 					Evt.Type = EVENT_KEY_DOWN;
++					Evt.X = 0;
++					Evt.Y = 0;
++					Evt.Buttons = 0;
+ 					Evt.Char = KbdBuf[ki];
++					Evt.Key = (U16)(U8)KbdBuf[ki];
++					Evt.Modifiers = AetherKeyboardModifiers();
+ 					EventQueuePush(&Eq, &Evt);
+ 				}
+ 			}
+@@ -1230,12 +1350,16 @@
+ 				break;
+ 			}
+ 
+-			case EVENT_KEY_DOWN: {
++			case EVENT_KEY_DOWN:
++			case EVENT_KEY_UP: {
+ 				AetherClient *Client = AetherFindClientByWindowIndex(
+ 					Clients, WinMgr->FocusedIndex);
+ 				if (Client && Client->WindowIndex >= 0) {
+ 					AdkAetherKeyInputMessage Msg;
+ 					Msg.Char = Evt.Char;
++					Msg.Key = Evt.Key;
++					Msg.Pressed = Evt.Type == EVENT_KEY_DOWN ? 1 : 0;
++					Msg.Modifiers = Evt.Modifiers;
+ 					PulseSend(Client->ProcessId, AdkAetherMessageKeyInput, &Msg,
+ 							  sizeof(Msg));
+ 				}

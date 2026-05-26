@@ -8,7 +8,7 @@ STAGE2_SOURCE_DIR := Stage2/Source
 STAGE2_INCLUDE_DIR := Stage2/Include
 COMMON_SOURCE_DIR := ../Common/Source
 COMMON_INCLUDE_DIR := ../Common/Include
-DEBUG ?= 1
+DEBUG ?= 0
 BOOTLOADER_DEBUG := 0
 
 ifeq ($(DEBUG),1)

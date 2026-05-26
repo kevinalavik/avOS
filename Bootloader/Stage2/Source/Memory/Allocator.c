@@ -87,8 +87,8 @@ bool AllocatorInit(const MemoryMap *Map)
 	HeapCursor = BestBase;
 	HeapEnd = BestEnd;
 	DebugLog("ALLOC", "heap 0x%08x-0x%08x (%u KiB)", (unsigned int)HeapCursor,
-			(unsigned int)HeapEnd,
-			(unsigned int)((HeapEnd - HeapCursor) / 1024u));
+			 (unsigned int)HeapEnd,
+			 (unsigned int)((HeapEnd - HeapCursor) / 1024u));
 	return true;
 }
 
@@ -105,7 +105,7 @@ void *Alloc(size_t Size, size_t Alignment)
 	uintptr_t Address = AlignUp(HeapCursor, Alignment);
 	if (Address > HeapEnd || Size > (HeapEnd - Address)) {
 		DebugLog("ALLOC", "out of memory allocating %u bytes",
-				(unsigned int)Size);
+				 (unsigned int)Size);
 		return 0;
 	}
 

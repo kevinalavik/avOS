@@ -1,0 +1,104 @@
+--- Kernel/Source/Drivers/Input/Keyboard.c	2026-05-26 11:49:43.464654201 +0000
++++ Kernel/Source/Drivers/Input/Keyboard.c	2026-05-26 11:49:43.495783057 +0000
+@@ -6,10 +6,12 @@
+ #include <Library/Stdout.h>
+ 
+ #include <stdbool.h>
++#include <stdint.h>
+ 
+ #define KbdData 0x60
+ #define KbdStat 0x64
+ #define KbdBufSize 256
++#define KbdKeyStateSize 512
+ 
+ static volatile struct {
+ 	char Data[KbdBufSize];
+@@ -177,22 +281,30 @@
+ 
+ 	if (ext) {
+ 		ext = false;
++		KbdProcessExtended(sc);
+ 		return;
+ 	}
+ 
+ 	bool rel = (sc & 0x80) != 0;
++	bool down = !rel;
+ 	uint8_t key = sc & 0x7F;
+ 
+ 	switch (key) {
+ 	case 0x2A:
++		KbdSetKey(KbdKeyLeftShift, down);
++		KbdUpdateMods();
++		return;
+ 	case 0x36:
+-		KbdMod.Shift = !rel;
++		KbdSetKey(KbdKeyRightShift, down);
++		KbdUpdateMods();
+ 		return;
+ 	case 0x1D:
+-		KbdMod.Ctrl = !rel;
++		KbdSetKey(KbdKeyLeftCtrl, down);
++		KbdUpdateMods();
+ 		return;
+ 	case 0x38:
+-		KbdMod.Alt = !rel;
++		KbdSetKey(KbdKeyLeftAlt, down);
++		KbdUpdateMods();
+ 		return;
+ 	case 0x3A:
+ 		if (!rel)
+@@ -200,6 +312,12 @@
+ 		return;
+ 	}
+ 
++	uint16_t EventKey = KbdNormalKeyCode(key);
++	if (EventKey == KbdKeyNone)
++		return;
++
++	KbdSetKey(EventKey, down);
++
+ 	if (rel)
+ 		return;
+ 
+@@ -214,18 +332,7 @@
+ 
+ 	if (c) {
+ 		KbdPutChar(c);
+-		if (KbdEcho) {
+-			if (c == '\n') {
+-				StdoutPutc('\r');
+-				StdoutPutc('\n');
+-			} else if (c == '\b') {
+-				StdoutPutc('\b');
+-				StdoutPutc(' ');
+-				StdoutPutc('\b');
+-			} else {
+-				StdoutPutc(c);
+-			}
+-		}
++		KbdEchoChar(c);
+ 	}
+ }
+ 
+@@ -258,6 +365,8 @@
+ 	(void)Dev;
+ 	KbdBuffer.Head = 0;
+ 	KbdBuffer.Tail = 0;
++	for (uint16_t Key = 0; Key < KbdKeyStateSize; ++Key)
++		KbdKeyState[Key] = 0;
+ 	KbdMod.Shift = KbdMod.Ctrl = KbdMod.Alt = KbdMod.Caps = false;
+ 	KbdEcho = false;
+ 
+@@ -319,6 +428,12 @@
+ {
+ 	(void)Dev;
+ 	(void)Arg;
++
++	if (Cmd >= KbdCtrlIsKeyDownBase &&
++		Cmd < KbdCtrlIsKeyDownBase + KbdKeyStateSize) {
++		return KbdIsKeyDown((uint16_t)(Cmd - KbdCtrlIsKeyDownBase)) ? 1 : 0;
++	}
++
+ 	switch (Cmd) {
+ 	case KbdCtrlEchoOn:
+ 		KbdEcho = true;

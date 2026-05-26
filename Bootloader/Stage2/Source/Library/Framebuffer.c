@@ -66,7 +66,7 @@ static bool EnableBochsVbeFramebuffer(void)
 	BochsVbeWrite(BochsVbeIndexYres, BootFramebufferHeight);
 	BochsVbeWrite(BochsVbeIndexBpp, BootFramebufferBpp);
 	BochsVbeWrite(BochsVbeIndexEnable,
-				   BochsVbeEnabled | BochsVbeLinearFramebuffer);
+				  BochsVbeEnabled | BochsVbeLinearFramebuffer);
 
 	VesaModeNumber = 1;
 	VesaFramebufferAddress = VesaFramebufferAddressFallback;
@@ -220,5 +220,5 @@ void FramebufferInit(BootInfo *Info)
 	Info->Framebuffer.Bpp = (uint8_t)VesaBpp;
 
 	DebugLog("FB", "framebuffer at 0x%08X  %ux%u  %ubpp  pitch=%u",
-		  FramebufferAddress, VesaWidth, VesaHeight, VesaBpp, VesaPitch);
+			 FramebufferAddress, VesaWidth, VesaHeight, VesaBpp, VesaPitch);
 }

@@ -27,7 +27,7 @@ bool DiskReadSectors(uint32_t Lba, uint8_t Count, void *Buffer)
 
 	if (Count == 0 || Lba > (UINT32_MAX - Count)) {
 		BootError("BIOS", "read rejected: LBA %u count %u", (unsigned int)Lba,
-				 (unsigned int)Count);
+				  (unsigned int)Count);
 		return false;
 	}
 
@@ -42,7 +42,7 @@ bool DiskReadSectors(uint32_t Lba, uint8_t Count, void *Buffer)
 
 		if (BiosDiskReadSectors(CurrentLba, 1, BiosBounceSector) == 0) {
 			BootError("BIOS", "INT 13h read failed at LBA %u",
-					 (unsigned int)CurrentLba);
+					  (unsigned int)CurrentLba);
 			return false;
 		}
 

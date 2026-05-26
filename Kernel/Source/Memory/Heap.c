@@ -249,8 +249,8 @@ static HeapBlock *CarveBlock(HeapBlock *Block, size_t Size, size_t Alignment)
 		Block = AlignedBlock;
 	}
 
-	uint64_t AllocationEnd = (uint64_t)(uintptr_t)Block + HeaderSize() +
-							 PayloadSize;
+	uint64_t AllocationEnd =
+		(uint64_t)(uintptr_t)Block + HeaderSize() + PayloadSize;
 	if (End >= AllocationEnd + MinBlockTotal()) {
 		HeapBlock *Suffix = (HeapBlock *)(uintptr_t)AllocationEnd;
 		InitBlock(Suffix, End - AllocationEnd - HeaderSize(), true);
@@ -272,8 +272,7 @@ static HeapBlock *PointerToBlock(void *Pointer)
 		return 0;
 	}
 
-	HeapBlock *Block =
-		(HeapBlock *)(uintptr_t)(Address - HeaderSize());
+	HeapBlock *Block = (HeapBlock *)(uintptr_t)(Address - HeaderSize());
 	if (Block->Magic != HeapBlockMagic) {
 		return 0;
 	}
@@ -286,16 +285,15 @@ static void Coalesce(HeapBlock *Block)
 	if (Block->Next != 0 && Block->Next->Free &&
 		BlockEnd(Block) == (uint64_t)(uintptr_t)Block->Next) {
 		HeapBlock *Next = Block->Next;
-		Block->Size = BlockEnd(Next) - (uint64_t)(uintptr_t)Block -
-					  HeaderSize();
+		Block->Size =
+			BlockEnd(Next) - (uint64_t)(uintptr_t)Block - HeaderSize();
 		RemoveBlock(Next);
 	}
 
 	if (Block->Prev != 0 && Block->Prev->Free &&
 		BlockEnd(Block->Prev) == (uint64_t)(uintptr_t)Block) {
 		HeapBlock *Prev = Block->Prev;
-		Prev->Size = BlockEnd(Block) - (uint64_t)(uintptr_t)Prev -
-					 HeaderSize();
+		Prev->Size = BlockEnd(Block) - (uint64_t)(uintptr_t)Prev - HeaderSize();
 		RemoveBlock(Block);
 	}
 }
@@ -303,9 +301,9 @@ static void Coalesce(HeapBlock *Block)
 bool HeapInit(void)
 {
 	HeapReserved = KernelHeapReserveSize;
-	HeapBase = VmmReserveRegion(HeapReserved, VmmRegionKernelHeap |
-												   VmmRegionWritable |
-												   VmmRegionAnonymous);
+	HeapBase =
+		VmmReserveRegion(HeapReserved, VmmRegionKernelHeap | VmmRegionWritable |
+										   VmmRegionAnonymous);
 	if (HeapBase == 0) {
 		LogError("core.mm.heap", "failed to reserve kernel heap");
 		return false;
@@ -472,8 +470,8 @@ void *HeapRealloc(void *Pointer, size_t Size, size_t Alignment)
 	if ((Address & (Alignment - 1ull)) == 0 && Block->Size >= PayloadSize) {
 		uint64_t OldSize = Block->Size;
 		uint64_t End = BlockEnd(Block);
-		uint64_t NewEnd = (uint64_t)(uintptr_t)Block + HeaderSize() +
-						  PayloadSize;
+		uint64_t NewEnd =
+			(uint64_t)(uintptr_t)Block + HeaderSize() + PayloadSize;
 
 		if (End >= NewEnd + MinBlockTotal()) {
 			HeapBlock *Suffix = (HeapBlock *)(uintptr_t)NewEnd;

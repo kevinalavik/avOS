@@ -2,6 +2,7 @@ bits 64
 section .text
 
 extern IdtHandle
+global IdtRestoreFrame
 
 IsrCommon:
     push r15
@@ -41,7 +42,9 @@ IsrCommon:
 
     mov rdi, rsp
     call IdtHandle
+    mov rsp, rax
 
+IdtRestoreFrame:
     pop rcx
     mov es, cx
     pop rcx
@@ -79,10 +82,11 @@ IsrCommon:
 %rep 256
 IsrWrapper%+i:
     %if i == 8 || i == 10 || i == 11 || i == 12 || i == 13 || i == 14 || i == 17 || i == 21 || i == 29 || i == 30
+        push i
     %else
         push 0
+        push i
     %endif
-    push i
     jmp IsrCommon
 %assign i i+1
 %endrep

@@ -1,0 +1,35 @@
+--- ADK/Include/Adk/AdkAether.h	2026-05-26 11:49:43.717314541 +0000
++++ ADK/Include/Adk/AdkAether.h	2026-05-26 11:49:43.740214151 +0000
+@@ -37,8 +37,32 @@
+ 	U64 SharedMemId;
+ } AdkAetherWindowReadyMessage;
+ 
++#define AdkKeyEscape 0x001Bu
++#define AdkKeyBackspace 0x0008u
++#define AdkKeyTab 0x0009u
++#define AdkKeyEnter 0x000Au
++#define AdkKeySpace 0x0020u
++#define AdkKeyLeftShift 0x0100u
++#define AdkKeyRightShift 0x0101u
++#define AdkKeyLeftCtrl 0x0102u
++#define AdkKeyRightCtrl 0x0103u
++#define AdkKeyLeftAlt 0x0104u
++#define AdkKeyRightAlt 0x0105u
++#define AdkKeyUp 0x0110u
++#define AdkKeyDown 0x0111u
++#define AdkKeyLeft 0x0112u
++#define AdkKeyRight 0x0113u
++
++#define AdkKeyModShift 0x01u
++#define AdkKeyModCtrl 0x02u
++#define AdkKeyModAlt 0x04u
++#define AdkKeyModCaps 0x08u
++
+ typedef struct {
+ 	char Char;
++	U16 Key;
++	U8 Pressed;
++	U8 Modifiers;
+ } AdkAetherKeyInputMessage;
+ 
+ typedef struct {

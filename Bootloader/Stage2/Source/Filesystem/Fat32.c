@@ -94,7 +94,8 @@ static bool ReadFatEntry(const Fat32Volume *Volume, uint32_t Cluster,
 	uint32_t SectorOffset = Offset % DiskSectorSize;
 
 	if (!BlockFsReadSectors(&Volume->Block, Sector, 1, Volume->SectorBuffer)) {
-		BootError("FAT32", "failed to read FAT sector %u", (unsigned int)Sector);
+		BootError("FAT32", "failed to read FAT sector %u",
+				  (unsigned int)Sector);
 		return false;
 	}
 
@@ -277,12 +278,10 @@ static void ReadLongNameEntry(const uint8_t *Entry,
 	*HaveLongNameOut = true;
 }
 
-static bool FindDirectoryEntry(const Fat32Volume *Volume,
-							   uint32_t DirectoryCluster,
-							   const char ShortName[11],
-							   const char *SearchLongName,
-							   size_t SearchLongNameLength,
-							   Fat32DirectoryEntry *Found)
+static bool
+FindDirectoryEntry(const Fat32Volume *Volume, uint32_t DirectoryCluster,
+				   const char ShortName[11], const char *SearchLongName,
+				   size_t SearchLongNameLength, Fat32DirectoryEntry *Found)
 {
 	uint32_t Cluster = DirectoryCluster;
 	char LongNameBuffer[Fat32LongNameMax];
@@ -297,7 +296,7 @@ static bool FindDirectoryEntry(const Fat32Volume *Volume,
 			if (!BlockFsReadSectors(&Volume->Block, ClusterLba + Sector, 1,
 									Volume->SectorBuffer)) {
 				BootError("FAT32", "failed to read directory cluster %u",
-						 (unsigned int)Cluster);
+						  (unsigned int)Cluster);
 				return false;
 			}
 
@@ -440,7 +439,7 @@ bool Fat32Mount(Fat32Volume *Volume, const BlockDevice *Device)
 	if (!BlockFsReadSectors(&Volume->Block, PartitionLba, 1,
 							Volume->SectorBuffer)) {
 		BootError("FAT32", "failed to read boot sector at LBA %u",
-				 (unsigned int)PartitionLba);
+				  (unsigned int)PartitionLba);
 		return false;
 	}
 
@@ -454,11 +453,11 @@ bool Fat32Mount(Fat32Volume *Volume, const BlockDevice *Device)
 	if (BytesPerSector != DiskSectorSize || SectorsPerCluster == 0 ||
 		FatCount == 0 || SectorsPerFat == 0 || RootCluster < 2) {
 		BootError("FAT32",
-				 "unsupported BPB: bytes/sector %u SPC %u FATs %u SPF %u "
-				 "root %u",
-				 (unsigned int)BytesPerSector, (unsigned int)SectorsPerCluster,
-				 (unsigned int)FatCount, (unsigned int)SectorsPerFat,
-				 (unsigned int)RootCluster);
+				  "unsupported BPB: bytes/sector %u SPC %u FATs %u SPF %u "
+				  "root %u",
+				  (unsigned int)BytesPerSector, (unsigned int)SectorsPerCluster,
+				  (unsigned int)FatCount, (unsigned int)SectorsPerFat,
+				  (unsigned int)RootCluster);
 		return false;
 	}
 
@@ -470,10 +469,10 @@ bool Fat32Mount(Fat32Volume *Volume, const BlockDevice *Device)
 	Volume->DataLba = Volume->FatLba + (FatCount * SectorsPerFat);
 	Volume->RootCluster = RootCluster;
 
-	DebugLog("FAT32", "BPB SPC %u FATs %u SPF %u data LBA %u",
-			(unsigned int)Volume->SectorsPerCluster,
-			(unsigned int)Volume->FatCount, (unsigned int)Volume->SectorsPerFat,
-			(unsigned int)Volume->DataLba);
+	DebugLog(
+		"FAT32", "BPB SPC %u FATs %u SPF %u data LBA %u",
+		(unsigned int)Volume->SectorsPerCluster, (unsigned int)Volume->FatCount,
+		(unsigned int)Volume->SectorsPerFat, (unsigned int)Volume->DataLba);
 	return true;
 }
 
@@ -526,7 +525,7 @@ size_t Fat32ReadFileAt(const Fat32Volume *Volume,
 			if (!BlockFsReadSectors(&Volume->Block, ClusterLba + Sector, 1,
 									Volume->ScratchBuffer)) {
 				BootError("FAT32", "short read from '%s' at cluster %u",
-						 Entry->Name, (unsigned int)Cluster);
+						  Entry->Name, (unsigned int)Cluster);
 				return TotalRead;
 			}
 

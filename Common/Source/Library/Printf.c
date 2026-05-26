@@ -6,6 +6,45 @@
 #include <Library/Stdout.h>
 
 void (*StdoutPutc)(char Character) = NULL;
+static unsigned int StdoutLockDepth;
+static bool StdoutInterruptsEnabled;
+
+static uintptr_t ReadFlags(void)
+{
+	uintptr_t Flags;
+
+#if defined(__x86_64__)
+	__asm__ volatile("pushfq; popq %0" : "=r"(Flags));
+#else
+	__asm__ volatile("pushf; pop %0" : "=r"(Flags));
+#endif
+
+	return Flags;
+}
+
+void StdoutLock(void)
+{
+	uintptr_t Flags = ReadFlags();
+	__asm__ volatile("cli" ::: "memory");
+
+	if (StdoutLockDepth == 0) {
+		StdoutInterruptsEnabled = (Flags & ((uintptr_t)1u << 9)) != 0;
+	}
+
+	++StdoutLockDepth;
+}
+
+void StdoutUnlock(void)
+{
+	if (StdoutLockDepth == 0) {
+		return;
+	}
+
+	--StdoutLockDepth;
+	if (StdoutLockDepth == 0 && StdoutInterruptsEnabled) {
+		__asm__ volatile("sti" ::: "memory");
+	}
+}
 
 typedef struct PrintState {
 	int Written;
@@ -116,14 +155,17 @@ static void EmitString(PrintState *State, const char *String, int Width,
 
 int PrintChar(int Character)
 {
+	StdoutLock();
 	if (StdoutPutc != NULL) {
 		StdoutPutc((char)Character);
 	}
+	StdoutUnlock();
 	return Character;
 }
 
 int PrintLine(const char *String)
 {
+	StdoutLock();
 	if (StdoutPutc != NULL) {
 		while (*String != '\0') {
 			StdoutPutc(*String++);
@@ -131,12 +173,15 @@ int PrintLine(const char *String)
 		StdoutPutc('\n');
 		StdoutPutc('\r');
 	}
+	StdoutUnlock();
 	return 0;
 }
 
 int VPrintf(const char *Format, va_list Arguments)
 {
 	PrintState State = { 0 };
+
+	StdoutLock();
 
 	while (*Format != '\0') {
 		if (*Format != '%') {
@@ -286,6 +331,7 @@ int VPrintf(const char *Format, va_list Arguments)
 		++Format;
 	}
 
+	StdoutUnlock();
 	return State.Written;
 }
 

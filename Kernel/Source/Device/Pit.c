@@ -1,5 +1,6 @@
 #include <Device/Pit.h>
 #include <Arch/Irq.h>
+#include <Core/Scheduler.h>
 #include <Core/Log.h>
 #include <Device/PortIO.h>
 
@@ -38,11 +39,10 @@ static void PitWaitBaseCycles(uint64_t Cycles)
 	}
 }
 
-static void PitHandler(Frame *Frame)
+static Frame *PitHandler(Frame *Frame)
 {
-	(void)Frame;
 	PitTicks++;
-	// for now dont do shit
+	return SchedulerSchedule(Frame);
 }
 
 void PitInit(uint32_t Frequency)
